@@ -21,7 +21,7 @@ const path = require('path');
 
 // Agent 信息
 const AGENT_NAME = '龙虾营地 Agent';
-const AGENT_VERSION = '1.6.0';
+const AGENT_VERSION = '1.7.0';
 const GITHUB_REPO = 'https://github.com/PhosAQy/claw-hub';
 
 // 配置
@@ -32,10 +32,11 @@ const CONFIG = {
   reportInterval: 5000,  // 上报间隔
   gatewayPort: 18789,    // Gateway 端口
   gatewayToken: process.env.CLAW_GATEWAY_TOKEN || '',  // Gateway Token (从环境变量读取)
+  // sessions 目录：优先使用环境变量，否则根据 sessionsAgentId 或 agentId 计算
   get sessionsDir() {
-    // 动态计算：根据 agentId 或使用环境变量
-    return process.env.CLAW_SESSIONS_DIR || 
-           path.join(os.homedir(), '.openclaw/agents', this.agentId, 'sessions');
+    if (process.env.CLAW_SESSIONS_DIR) return process.env.CLAW_SESSIONS_DIR;
+    const sessionsAgentId = process.env.CLAW_SESSIONS_AGENT_ID || this.agentId;
+    return path.join(os.homedir(), '.openclaw/agents', sessionsAgentId, 'sessions');
   },
   updateToken: process.env.CLAW_UPDATE_TOKEN || ''  // 更新令牌
 };
