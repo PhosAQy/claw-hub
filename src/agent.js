@@ -21,7 +21,7 @@ const path = require('path');
 
 // Agent 信息
 const AGENT_NAME = '龙虾营地 Agent';
-const AGENT_VERSION = '1.10.2';
+const AGENT_VERSION = '1.11.0';
 const GITHUB_REPO = 'https://github.com/PhosAQy/claw-hub';
 
 // 配置
@@ -442,6 +442,12 @@ function connect() {
         // 收到更新命令
         console.log('[Agent] 收到更新命令');
         handleUpdate(msg.payload?.token);
+      } else if (msg.type === 'session-history') {
+        // 获取会话历史
+        const sessionKey = msg.payload?.sessionKey;
+        const limit = msg.payload?.limit || 100;
+        const requestId = msg.payload?.requestId;
+        handleSessionHistory(sessionKey, limit, requestId);
       }
     } catch (e) {
       console.error('[Agent] 解析消息失败:', e.message);
@@ -470,6 +476,92 @@ async function handleUpdate(token) {
   
   const result = await doUpdate();
   send({ type: 'update-result', payload: result });
+}
+
+/**
+ * 获取会话历史记录
+ * @param {string} sessionKey - 会话 key
+ * @param {number} limit - 限制返回的消息数量
+ * @param {string} requestId - 请求 ID（用于 Hub 匹配响应）
+ */
+function handleSessionHistory(sessionKey, limit = 100, requestId = null) {
+  if (!sessionKey) {
+    send({ type: 'session-history-result', payload: { success: false, error: 'Missing sessionKey', requestId } });
+    return;
+  }
+  
+  try {
+    // 在所有 agents 目录中查找 session 文件
+    const agentsDir = path.join(os.homedir(), '.openclaw/agents');
+    const dirs = fs.readdirSync(agentsDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => path.join(agentsDir, d.name, 'sessions'));
+    
+    let filePath = null;
+    for (const dir of dirs) {
+      const testPath = path.join(dir, `${sessionKey}.jsonl`);
+      if (fs.existsSync(testPath)) {
+        filePath = testPath;
+        break;
+      }
+    }
+    
+    if (!filePath) {
+      send({ type: 'session-history-result', payload: { success: false, error: 'Session not found', requestId } });
+      return;
+    }
+    
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n').filter(Boolean);
+    
+    const messages = [];
+    for (const line of lines) {
+      try {
+        const record = JSON.parse(line);
+        if (record.type === 'message' && record.message?.role) {
+          const msg = record.message;
+          // 提取文本内容
+          let text = '';
+          if (typeof msg.content === 'string') {
+            text = msg.content;
+          } else if (Array.isArray(msg.content)) {
+            text = msg.content
+              .filter(c => c.type === 'text')
+              .map(c => c.text || '')
+              .join('\n');
+          }
+          
+          // 限制文本长度
+          if (text.length > 2000) {
+            text = text.substring(0, 2000) + '...';
+          }
+          
+          messages.push({
+            role: msg.role,
+            text: text.trim(),
+            timestamp: record.timestamp,
+            model: msg.model || record.model
+          });
+        }
+      } catch (e) {}
+    }
+    
+    // 只返回最近的 N 条消息
+    const recentMessages = messages.slice(-limit);
+    
+    send({
+      type: 'session-history-result',
+      payload: {
+        success: true,
+        sessionKey,
+        count: recentMessages.length,
+        messages: recentMessages,
+        requestId
+      }
+    });
+  } catch (e) {
+    send({ type: 'session-history-result', payload: { success: false, error: e.message, requestId } });
+  }
 }
 
 // 启动

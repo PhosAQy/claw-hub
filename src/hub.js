@@ -206,6 +206,7 @@ async function getTokenTimeSeries(agentId = null, hours = 6) {
 
 const agents = new Map();
 const clients = new Set();
+const pendingRequests = new Map();  // 等待 Agent 响应的请求
 
 // ──────────────────────────────────────────────
 // 版本管理和更新
@@ -518,6 +519,44 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 获取会话历史
+  if (req.url.startsWith('/api/session/history')) {
+    const url = new URL(req.url, 'http://x');
+    const agentId = url.searchParams.get('agent') || 'main';
+    const sessionKey = url.searchParams.get('session');
+    const limit = parseInt(url.searchParams.get('limit') || '100');
+    
+    if (!sessionKey) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing session parameter' }));
+      return;
+    }
+    
+    const agent = agents.get(agentId);
+    if (!agent || !agent.ws) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Agent not found or offline' }));
+      return;
+    }
+    
+    // 保存响应回调，等待 Agent 返回
+    const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const timeout = setTimeout(() => {
+      pendingRequests.delete(requestId);
+      res.writeHead(504, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Timeout waiting for agent response' }));
+    }, 10000);
+    
+    pendingRequests.set(requestId, { res, timeout });
+    
+    // 发送请求到 Agent
+    agent.ws.send(JSON.stringify({
+      type: 'session-history',
+      payload: { sessionKey, limit, requestId }
+    }));
+    return;
+  }
+
   res.writeHead(404); res.end('Not Found');
 });
 
@@ -610,6 +649,19 @@ function handleMessage(ws, msg, setAgentId) {
     case 'update-result':
       // Agent 更新结果
       console.log(`[Hub] Agent ${payload.id} 更新结果:`, payload);
+      break;
+    
+    case 'session-history-result':
+      // 会话历史返回
+      const requestId = payload.requestId;
+      if (requestId && pendingRequests.has(requestId)) {
+        const { res, timeout } = pendingRequests.get(requestId);
+        clearTimeout(timeout);
+        pendingRequests.delete(requestId);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(payload));
+      }
       break;
   }
 }
