@@ -32,7 +32,11 @@ const CONFIG = {
   reportInterval: 5000,  // 上报间隔
   gatewayPort: 18789,    // Gateway 端口
   gatewayToken: process.env.CLAW_GATEWAY_TOKEN || '',  // Gateway Token (从环境变量读取)
-  sessionsDir: path.join(os.homedir(), '.openclaw/agents/main/sessions'),
+  get sessionsDir() {
+    // 动态计算：根据 agentId 或使用环境变量
+    return process.env.CLAW_SESSIONS_DIR || 
+           path.join(os.homedir(), '.openclaw/agents', this.agentId, 'sessions');
+  },
   updateToken: process.env.CLAW_UPDATE_TOKEN || ''  // 更新令牌
 };
 
