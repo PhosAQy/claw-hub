@@ -21,7 +21,7 @@ const path = require('path');
 
 // Agent 信息
 const AGENT_NAME = '龙虾营地 Agent';
-const AGENT_VERSION = '1.11.0';
+const AGENT_VERSION = '1.12.0';
 const GITHUB_REPO = 'https://github.com/PhosAQy/claw-hub';
 
 // 配置
@@ -522,9 +522,18 @@ function handleSessionHistory(sessionKey, limit = 100, requestId = null) {
           const msg = record.message;
           // 提取文本内容
           let text = '';
+          let thinking = '';
+          
           if (typeof msg.content === 'string') {
             text = msg.content;
           } else if (Array.isArray(msg.content)) {
+            // 提取 thinking
+            const thinkingBlock = msg.content.find(c => c.type === 'thinking');
+            if (thinkingBlock && thinkingBlock.thinking) {
+              thinking = thinkingBlock.thinking;
+            }
+            
+            // 提取文本
             text = msg.content
               .filter(c => c.type === 'text')
               .map(c => c.text || '')
@@ -532,13 +541,17 @@ function handleSessionHistory(sessionKey, limit = 100, requestId = null) {
           }
           
           // 限制文本长度
-          if (text.length > 2000) {
-            text = text.substring(0, 2000) + '...';
+          if (text.length > 4000) {
+            text = text.substring(0, 4000) + '...';
+          }
+          if (thinking.length > 1000) {
+            thinking = thinking.substring(0, 1000) + '...';
           }
           
           messages.push({
             role: msg.role,
             text: text.trim(),
+            thinking: thinking.trim(),
             timestamp: record.timestamp,
             model: msg.model || record.model
           });

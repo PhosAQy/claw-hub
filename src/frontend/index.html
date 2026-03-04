@@ -353,21 +353,28 @@
     }
     
     .chat-message.user {
-      background: #1a1a2e;
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
       margin-left: auto;
-      border: 1px solid #0f3460;
+      border-radius: 16px 16px 4px 16px;
     }
     
     .chat-message.assistant {
-      background: #0f3460;
+      background: #1a1a2e;
       margin-right: auto;
+      border-radius: 16px 16px 16px 4px;
+      border: 1px solid #0f3460;
     }
     
     .chat-message .role {
       font-size: 11px;
-      color: #888;
+      color: rgba(255,255,255,0.7);
       margin-bottom: 6px;
       text-transform: uppercase;
+      font-weight: 600;
+    }
+    
+    .chat-message.assistant .role {
+      color: #00d9ff;
     }
     
     .chat-message.user .role {
@@ -375,17 +382,38 @@
     }
     
     .chat-message .text {
-      font-size: 13px;
+      font-size: 14px;
       color: #eee;
-      line-height: 1.5;
+      line-height: 1.6;
       white-space: pre-wrap;
       word-break: break-word;
     }
     
+    .chat-message.user .text {
+      color: white;
+    }
+    
+    .chat-message .thinking {
+      font-size: 13px;
+      color: #888;
+      background: #0f0f1a;
+      border-left: 3px solid #f97316;
+      padding: 8px 12px;
+      margin: 8px 0;
+      border-radius: 4px;
+      font-style: italic;
+    }
+    
     .chat-message .meta {
       font-size: 10px;
-      color: #666;
+      color: rgba(255,255,255,0.5);
       margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .chat-message.assistant .meta {
+      color: #666;
     }
     
     .chat-loading {
@@ -1004,7 +1032,7 @@
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
           </div>
           <div class="modal-body">
-            <div class="chat-loading">加载中...</div>
+            <div class="chat-loading">🔄 加载中...</div>
           </div>
         </div>
       `;
@@ -1016,7 +1044,7 @@
       });
       
       // 获取会话历史
-      fetch(`/api/session/history?agent=${agentId}&session=${encodeURIComponent(sessionKey)}&limit=50`)
+      fetch(`/api/session/history?agent=${agentId}&session=${encodeURIComponent(sessionKey)}&limit=100`)
         .then(res => res.json())
         .then(data => {
           const body = modal.querySelector('.modal-body');
@@ -1026,17 +1054,35 @@
           }
           
           if (!data.messages || data.messages.length === 0) {
-            body.innerHTML = '<div class="chat-error">暂无消息记录</div>';
+            body.innerHTML = '<div class="chat-error">📭 暂无消息记录</div>';
             return;
           }
           
-          body.innerHTML = data.messages.map(msg => `
-            <div class="chat-message ${msg.role}">
-              <div class="role">${msg.role === 'user' ? '👤 用户' : '🤖 ' + (msg.model || 'assistant')}</div>
-              <div class="text">${escapeHtml(msg.text)}</div>
-              <div class="meta">${msg.timestamp ? new Date(msg.timestamp).toLocaleString('zh-CN') : ''}</div>
-            </div>
-          `).join('');
+          body.innerHTML = data.messages.map(msg => {
+            const roleIcon = msg.role === 'user' ? '👤' : '🤖';
+            const roleName = msg.role === 'user' ? '用户' : (msg.model || 'assistant');
+            const time = msg.timestamp ? new Date(msg.timestamp).toLocaleString('zh-CN') : '';
+            
+            let thinkingHtml = '';
+            if (msg.thinking) {
+              thinkingHtml = `<div class="thinking">💭 ${escapeHtml(msg.thinking)}</div>`;
+            }
+            
+            return `
+              <div class="chat-message ${msg.role}">
+                <div class="role">${roleIcon} ${roleName}</div>
+                ${thinkingHtml}
+                <div class="text">${escapeHtml(msg.text)}</div>
+                <div class="meta">
+                  <span>${msg.role === 'user' ? '' : (msg.model || '')}</span>
+                  <span>${time}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+          
+          // 滚动到底部
+          body.scrollTop = body.scrollHeight;
         })
         .catch(e => {
           modal.querySelector('.modal-body').innerHTML = `<div class="chat-error">❌ 加载失败: ${e.message}</div>`;
