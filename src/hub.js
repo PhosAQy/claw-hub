@@ -453,8 +453,16 @@ function broadcastToClients() {
 
 function getAgentList() {
   return Array.from(agents.values()).map(a => ({
-    id: a.id, name: a.name, host: a.host, status: a.status,
-    lastSeen: a.lastSeen, gateway: a.gateway, sessions: a.sessions, stats: a.stats
+    id: a.id,
+    name: a.name,
+    host: a.host,
+    agentVersion: a.agentVersion,  // Agent 版本
+    status: a.status,
+    lastSeen: a.lastSeen,
+    gateway: a.gateway,
+    sessions: a.sessions,
+    stats: a.stats,
+    plugins: a.plugins || []  // 插件列表
   }));
 }
 
