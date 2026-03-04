@@ -227,6 +227,7 @@
     let versionInfo = { version: '-', latest: '-', hasUpdate: false };
     let agentUpdateInfo = {};
     let historyUpdateTimer = null;  // 历史数据更新定时器
+    let needsFullRefresh = false;   // 是否需要完全刷新（用户主动刷新时）
     
     // Toast 消息系统
     function showToast(message, type = 'info') {
@@ -291,8 +292,9 @@
         return;
       }
       
-      // 如果有展开的 Agent，重新渲染整个列表（包括详情）
-      if (expandedAgent) {
+      // 如果需要完全刷新（用户主动刷新）
+      if (needsFullRefresh) {
+        needsFullRefresh = false;  // 重置标志
         renderAgentList();
         return;
       }
@@ -318,6 +320,23 @@
           statusBadge.className = `status-badge ${agent.status}`;
           statusDot.className = `status-dot ${agent.status}`;
           statusBadge.lastChild.textContent = agent.status === 'online' ? '在线' : '离线';
+        }
+        
+        // 如果这个 Agent 是展开的，更新 Gateway 状态
+        if (expandedAgent === agent.id) {
+          const gatewayStatus = agent.gateway?.status || 'unknown';
+          const gatewayRunning = gatewayStatus === 'running';
+          
+          // 更新 Gateway 状态徽章
+          const gatewayBadge = card.querySelector('.detail-section .status-badge');
+          if (gatewayBadge) {
+            gatewayBadge.className = `status-badge ${gatewayRunning ? 'online' : 'offline'}`;
+            const gatewayDot = gatewayBadge.querySelector('.status-dot');
+            if (gatewayDot) {
+              gatewayDot.className = `status-dot ${gatewayRunning ? 'online' : 'offline'}`;
+            }
+            gatewayBadge.lastChild.textContent = gatewayRunning ? '运行中' : '已停止';
+          }
         }
       });
     }
@@ -699,6 +718,9 @@
     }
     
     function refreshGatewayStatus(agentId) {
+      // 设置完全刷新标志
+      needsFullRefresh = true;
+      
       fetch(`/api/gateway/refresh?agent=${agentId}`)
         .then(res => res.json())
         .then(result => {
