@@ -576,6 +576,8 @@ function handleMessage(ws, msg, setAgentId) {
         agent.stats = payload.stats;
         agent.plugins = payload.plugins || [];  // 保存插件列表
         agent.agentVersion = payload.agentVersion;  // 保存 Agent 版本
+        agent.startTime = payload.startTime;  // 保存启动时间
+        agent.uptime = payload.uptime;  // 保存运行时长
         
         // 异步存库
         saveSnapshots(payload.id, agent.name, payload.sessions);
