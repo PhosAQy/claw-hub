@@ -308,7 +308,8 @@ function connect() {
 }
 
 // 启动
-console.log(`🦞 Claw Agent 启动`);
+console.log('');
+console.log(`🦞 龙虾营地 Agent v${AGENT_VERSION}`);
 console.log(`   Agent: ${CONFIG.agentName} (${CONFIG.agentId})`);
 console.log(`   Hub: ${CONFIG.hubUrl}`);
 console.log('');
