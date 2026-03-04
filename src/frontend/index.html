@@ -34,6 +34,7 @@
     .stat-box { text-align: center; }
     .stat-value { font-size: 20px; font-weight: bold; color: #00d9ff; font-family: 'SF Mono', Monaco, monospace; }
     .stat-label { font-size: 11px; color: #888; margin-top: 4px; text-transform: uppercase; }
+    .stat-sub { font-size: 10px; color: #666; margin-top: 2px; }
     
     .expand-icon { font-size: 20px; color: #888; transition: transform 0.3s; }
     .agent-card.expanded .expand-icon { transform: rotate(180deg); }
@@ -457,6 +458,7 @@
               <div class="stat-box">
                 <div class="stat-value">${formatTokens(agent.stats?.todayTokens)}</div>
                 <div class="stat-label">今日Token</div>
+                <div class="stat-sub">${formatTokens(agent.stats?.todayNetTokens)} 净消耗</div>
               </div>
               
               <div class="stat-box">
