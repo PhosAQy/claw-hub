@@ -385,7 +385,7 @@ const server = http.createServer((req, res) => {
         currentVersion: current,
         latestVersion: latest,
         hasUpdate,
-        repo: GITHUB_REPO
+        repo: GIT_REPO
       }));
     });
     return;
