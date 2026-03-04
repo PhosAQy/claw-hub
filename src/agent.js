@@ -8,6 +8,9 @@
  * - 采集系统资源
  * - 解析 session .jsonl 获取精确 token 使用（按半小时槽聚合）
  * - 定时上报
+ * 
+ * @name 龙虾营地 Agent
+ * @version 1.0.0
  */
 
 const WebSocket = require('ws');
@@ -15,6 +18,10 @@ const { execSync, spawn } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+
+// Agent 信息
+const AGENT_NAME = '龙虾营地 Agent';
+const AGENT_VERSION = '1.0.0';
 
 // 配置
 const CONFIG = {
@@ -264,7 +271,8 @@ function connect() {
       payload: {
         id: CONFIG.agentId,
         name: CONFIG.agentName,
-        host: getHostname()
+        host: getHostname(),
+        agentVersion: AGENT_VERSION  // Agent 版本
       }
     });
     

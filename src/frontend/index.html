@@ -447,7 +447,7 @@
         <tr>
           <td>
             <div style="font-weight:600">🦞 ${agent.name || agent.id}</div>
-            <div style="font-size:11px;color:#666">${agent.host || '--'}</div>
+            <div style="font-size:11px;color:#888">${agent.host || '--'} ${agent.agentVersion ? '· Agent v' + agent.agentVersion : ''}</div>
           </td>
           <td>
             <span class="status-badge ${agent.status}">
