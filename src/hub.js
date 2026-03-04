@@ -427,6 +427,7 @@ function handleMessage(ws, msg, setAgentId) {
         agent.gateway = payload.gateway;
         agent.sessions = payload.sessions || [];
         agent.stats = payload.stats;
+        agent.plugins = payload.plugins || [];  // 保存插件列表
         // 异步存库
         saveSnapshots(payload.id, agent.name, payload.sessions);
         // 存储精确的 token 使用数据
