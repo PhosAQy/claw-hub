@@ -214,9 +214,25 @@ function getPlugins() {
         if (cols.length >= 5 && cols[0] && cols[0] !== 'Name') {
           const [name, id, status, source, version] = cols;
           if (status === 'loaded') {
+            // 从 source 推断真实名称
+            let realName = name || id;
+            if (source.includes('memory-core')) {
+              realName = 'Memory (Core)';
+            } else if (source.includes('feishu-card')) {
+              realName = 'Feishu Interactive Card';
+            } else if (source.includes('feishu/index')) {
+              realName = 'Feishu';
+            } else if (source.includes('device-pair')) {
+              realName = 'Device Pairing';
+            } else if (source.includes('phone-control')) {
+              realName = 'Phone Control';
+            } else if (source.includes('talk-voice')) {
+              realName = 'Talk Voice';
+            }
+            
             plugins.push({
-              name: name || id,
-              id,
+              name: realName,
+              id: id || 'unknown',
               version: version || 'unknown',
               source: source || ''
             });
