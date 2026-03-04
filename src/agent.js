@@ -21,7 +21,7 @@ const path = require('path');
 
 // Agent 信息
 const AGENT_NAME = '龙虾营地 Agent';
-const AGENT_VERSION = '1.7.0';
+const AGENT_VERSION = '1.8.0';
 const GITHUB_REPO = 'https://github.com/PhosAQy/claw-hub';
 
 // 配置
@@ -100,57 +100,81 @@ function getSessions() {
 /**
  * 解析 session .jsonl 文件，获取精确的 token 使用数据
  * 按半小时槽聚合
+ * 自动扫描所有 agents 的 sessions 目录
  */
 function getTokenUsage(hours = 6) {
   const cutoff = Date.now() - hours * 3600 * 1000;
   const slots = {};
 
+  // 获取所有 sessions 目录
+  const agentsDir = path.join(os.homedir(), '.openclaw/agents');
+  let sessionsDirs = [];
+  
   try {
-    const files = fs.readdirSync(CONFIG.sessionsDir)
-      .filter(f => f.endsWith('.jsonl') && !f.includes('.deleted.'));
-
-    for (const file of files) {
-      const sessionId = file.replace('.jsonl', '');
-      const filePath = path.join(CONFIG.sessionsDir, file);
-      
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const lines = content.split('\n').filter(Boolean);
-        
-        for (const line of lines) {
-          try {
-            const record = JSON.parse(line);
-            
-            if (record.type === 'message' && record.message?.usage) {
-              const ts = new Date(record.timestamp).getTime();
-              if (ts >= cutoff) {
-                // 计算半小时槽
-                const d = new Date(ts);
-                const hour = d.getHours().toString().padStart(2, '0');
-                const minute = d.getMinutes() < 30 ? '00' : '30';
-                const slot = `${hour}:${minute}`;
-                
-                if (!slots[slot]) {
-                  slots[slot] = { slot, input: 0, output: 0, cacheRead: 0, count: 0 };
-                }
-                
-                const usage = record.message.usage;
-                slots[slot].input += usage.input || 0;
-                slots[slot].output += usage.output || 0;
-                slots[slot].cacheRead += usage.cacheRead || 0;
-                slots[slot].count += 1;
-              }
-            }
-          } catch (e) {
-            // 跳过解析失败的行
-          }
-        }
-      } catch (e) {
-        // 跳过无法读取的文件
-      }
+    // 优先使用配置的目录
+    if (process.env.CLAW_SESSIONS_DIR) {
+      sessionsDirs = [process.env.CLAW_SESSIONS_DIR];
+    } else if (process.env.CLAW_SESSIONS_AGENT_ID) {
+      sessionsDirs = [path.join(agentsDir, process.env.CLAW_SESSIONS_AGENT_ID, 'sessions')];
+    } else {
+      // 自动扫描所有 agents 的 sessions 目录
+      const agents = fs.readdirSync(agentsDir, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => path.join(agentsDir, d.name, 'sessions'));
+      sessionsDirs = agents;
     }
   } catch (e) {
-    // 目录不存在或无权限
+    // 使用默认目录
+    sessionsDirs = [CONFIG.sessionsDir];
+  }
+
+  for (const sessionsDir of sessionsDirs) {
+    try {
+      const files = fs.readdirSync(sessionsDir)
+        .filter(f => f.endsWith('.jsonl') && !f.includes('.deleted.'));
+
+      for (const file of files) {
+        const filePath = path.join(sessionsDir, file);
+        
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const lines = content.split('\n').filter(Boolean);
+          
+          for (const line of lines) {
+            try {
+              const record = JSON.parse(line);
+              
+              if (record.type === 'message' && record.message?.usage) {
+                const ts = new Date(record.timestamp).getTime();
+                if (ts >= cutoff) {
+                  // 计算半小时槽
+                  const d = new Date(ts);
+                  const hour = d.getHours().toString().padStart(2, '0');
+                  const minute = d.getMinutes() < 30 ? '00' : '30';
+                  const slot = `${hour}:${minute}`;
+                  
+                  if (!slots[slot]) {
+                    slots[slot] = { slot, input: 0, output: 0, cacheRead: 0, count: 0 };
+                  }
+                  
+                  const usage = record.message.usage;
+                  slots[slot].input += usage.input || 0;
+                  slots[slot].output += usage.output || 0;
+                  slots[slot].cacheRead += usage.cacheRead || 0;
+                  slots[slot].count += 1;
+                }
+              }
+            } catch (e) {
+              // 跳过解析失败的行
+            }
+          }
+        } catch (e) {
+          // 跳过无法读取的文件
+        }
+      }
+    } catch (e) {
+      // 目录不存在或无权限
+    }
   }
 
   // 转换为数组
