@@ -14,14 +14,14 @@
  */
 
 const WebSocket = require('ws');
-const { execSync, spawn } = require('child_process');
+const { execSync, exec, spawn } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
 
 // Agent 信息
 const AGENT_NAME = '龙虾营地 Agent';
-const AGENT_VERSION = '1.8.0';
+const AGENT_VERSION = '1.9.0';
 const GITHUB_REPO = 'https://github.com/PhosAQy/claw-hub';
 
 // 配置
@@ -317,17 +317,33 @@ async function doUpdate() {
       const updated = !stdout.includes('Already up to date');
       
       if (updated) {
-        // 更新成功，准备重启
         console.log('[Agent] 更新成功，即将重启...');
+        
+        // 发送成功响应后再重启
+        resolve({
+          success: true,
+          updated: true,
+          message: '更新成功，即将重启',
+          version: AGENT_VERSION
+        });
+        
+        // 延迟后自己重启（不依赖 pm2）
         setTimeout(() => {
-          process.exit(0);  // 退出进程，依赖外部进程管理器重启
-        }, 1000);
+          const child = spawn(process.execPath, [path.join(projectDir, 'src/agent.js')], {
+            detached: true,
+            stdio: 'inherit',
+            env: process.env
+          });
+          child.unref();
+          process.exit(0);
+        }, 1500);
+        return;
       }
       
       resolve({
         success: true,
-        updated,
-        message: updated ? '更新成功，即将重启' : '已是最新版本',
+        updated: false,
+        message: '已是最新版本',
         version: AGENT_VERSION
       });
     });
