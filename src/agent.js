@@ -214,11 +214,6 @@ function getPlugins() {
         if (cols.length >= 4) {
           const [name, id, status, source, version] = cols;
           
-          // 只保留有版本号的插件
-          if (!version || version === 'unknown') {
-            continue;
-          }
-          
           // 从 source 推断完整名称
           let fullName = name || id;
           if (source.includes('device-pair')) {
