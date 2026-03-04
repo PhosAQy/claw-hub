@@ -578,6 +578,7 @@ function handleMessage(ws, msg, setAgentId) {
         agent.agentVersion = payload.agentVersion;  // 保存 Agent 版本
         agent.startTime = payload.startTime;  // 保存启动时间
         agent.uptime = payload.uptime;  // 保存运行时长
+        agent.tokenUsage = payload.tokenUsage || [];  // 保存 token 使用数据
         
         // 异步存库
         saveSnapshots(payload.id, agent.name, payload.sessions);
