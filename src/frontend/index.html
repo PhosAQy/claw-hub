@@ -109,6 +109,7 @@
     let charts = {};
     let versionInfo = { version: '-', latest: '-', hasUpdate: false };
     let agentUpdateInfo = {};
+    let historyUpdateTimer = null;  // 历史数据更新定时器
     
     // 连接 WebSocket
     function connect() {
@@ -241,7 +242,21 @@
         setTimeout(() => {
           initAgentChart(expandedAgent);
           fetchHistory(expandedAgent);
+          
+          // 启动定时更新历史数据（每 60 秒）
+          if (historyUpdateTimer) clearInterval(historyUpdateTimer);
+          historyUpdateTimer = setInterval(() => {
+            if (expandedAgent) {
+              fetchHistory(expandedAgent);
+            }
+          }, 60000);
         }, 50);
+      } else {
+        // 收起时停止定时器
+        if (historyUpdateTimer) {
+          clearInterval(historyUpdateTimer);
+          historyUpdateTimer = null;
+        }
       }
     }
     
@@ -354,16 +369,30 @@
         
         if (charts[agentId] && data.history) {
           const slots = getLast6HourSlots();
-          const values = new Array(12).fill(0);
+          const newValues = new Array(12).fill(0);
           
           data.history.forEach(h => {
             const idx = slots.indexOf(h.time_slot);
             // API 返回的字段是 'tokens'，不是 'netTokens'
-            if (idx >= 0) values[idx] = parseInt(h.tokens) || 0;
+            if (idx >= 0) newValues[idx] = parseInt(h.tokens) || 0;
           });
           
-          charts[agentId].data.datasets[0].data = values;
-          charts[agentId].update();
+          // 智能更新：只更新有变化的数据
+          const chart = charts[agentId];
+          const currentValues = chart.data.datasets[0].data;
+          let hasChange = false;
+          
+          for (let i = 0; i < newValues.length; i++) {
+            if (currentValues[i] !== newValues[i]) {
+              currentValues[i] = newValues[i];
+              hasChange = true;
+            }
+          }
+          
+          // 只有数据变化时才更新图表
+          if (hasChange) {
+            chart.update('none');  // 'none' 模式：无动画更新，更流畅
+          }
         }
       } catch (e) {
         console.error('[History] 拉取失败:', e);
