@@ -307,6 +307,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 获取更新令牌（用于前端调用更新 API）
+  if (req.url === '/api/token') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ token: UPDATE_TOKEN }));
+    return;
+  }
+
   // 检查更新
   if (req.url === '/api/check-update') {
     getLatestVersion().then(latest => {
