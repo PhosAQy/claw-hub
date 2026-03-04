@@ -201,9 +201,12 @@
         `;
       }).join('');
       
-      // 初始化图表
+      // 初始化图表（使用 setTimeout 确保 DOM 已渲染）
       if (expandedAgent) {
-        initAgentChart(expandedAgent);
+        setTimeout(() => {
+          initAgentChart(expandedAgent);
+          fetchHistory(expandedAgent);
+        }, 100);
       }
     }
     
@@ -246,11 +249,6 @@
         expandedAgent = agentId;
       }
       updateAgentsList();
-      
-      // 加载历史数据
-      if (expandedAgent) {
-        fetchHistory(expandedAgent);
-      }
     }
     
     // 初始化 Agent 图表
