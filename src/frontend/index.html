@@ -8,9 +8,12 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
-    .header { background: #16213e; padding: 20px; border-bottom: 1px solid #0f3460; }
-    .header h1 { font-size: 24px; }
+    .header { background: #16213e; padding: 20px; border-bottom: 1px solid #0f3460; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
     .header .subtitle { color: #888; font-size: 14px; margin-top: 5px; }
+    .version-badge { font-size: 12px; color: #888; font-weight: normal; margin-left: 8px; }
+    .version-badge.has-update { color: #ff9f43; cursor: pointer; }
+    .version-badge.has-update:hover { text-decoration: underline; }
     .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
     
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
@@ -19,25 +22,39 @@
     .ws-status.connected { background: #00ff8820; color: #00ff88; }
     .ws-status.disconnected { background: #ff6b6b20; color: #ff6b6b; }
     
-    .agent-filter { display: flex; gap: 8px; flex-wrap: wrap; }
-    .agent-btn { padding: 8px 16px; border-radius: 20px; border: 1px solid #0f3460; background: #16213e; color: #888; cursor: pointer; font-size: 13px; transition: all 0.2s; }
-    .agent-btn:hover { border-color: #00d9ff; color: #00d9ff; }
-    .agent-btn.active { background: #00d9ff; color: #1a1a2e; border-color: #00d9ff; }
+    /* Agent 列表 */
+    .agent-card { background: #16213e; border-radius: 12px; margin-bottom: 15px; overflow: hidden; border: 1px solid #0f3460; }
+    .agent-header { padding: 20px; cursor: pointer; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 15px; align-items: center; }
+    .agent-header:hover { background: #1a1a2e; }
     
-    .chart-section { background: #16213e; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-    .chart-title { font-size: 14px; color: #00d9ff; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
-    .chart-container { position: relative; height: 250px; }
+    .agent-info { display: flex; flex-direction: column; gap: 4px; }
+    .agent-name { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    .agent-meta { font-size: 12px; color: #888; }
     
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
-    .stat-card { background: #16213e; border-radius: 12px; padding: 20px; text-align: center; }
-    .stat-value { font-size: 28px; font-weight: bold; color: #00d9ff; }
-    .stat-label { font-size: 12px; color: #888; margin-top: 5px; text-transform: uppercase; }
+    .stat-box { text-align: center; }
+    .stat-value { font-size: 20px; font-weight: bold; color: #00d9ff; font-family: 'SF Mono', Monaco, monospace; }
+    .stat-label { font-size: 11px; color: #888; margin-top: 4px; text-transform: uppercase; }
     
-    .agents-table { width: 100%; border-collapse: collapse; background: #16213e; border-radius: 12px; overflow: hidden; }
-    .agents-table th { background: #0f3460; padding: 15px 12px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #00d9ff; }
-    .agents-table td { padding: 15px 12px; border-bottom: 1px solid #1a1a2e; font-size: 14px; }
-    .agents-table tr:last-child td { border-bottom: none; }
-    .agents-table tr:hover { background: #1a1a2e; }
+    .expand-icon { font-size: 20px; color: #888; transition: transform 0.3s; }
+    .agent-card.expanded .expand-icon { transform: rotate(180deg); }
+    
+    /* Agent 详情 */
+    .agent-details { display: none; background: #1a1a2e; padding: 20px; border-top: 1px solid #0f3460; }
+    .agent-card.expanded .agent-details { display: block; }
+    
+    .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    
+    .detail-section { background: #16213e; border-radius: 12px; padding: 20px; }
+    .detail-title { font-size: 14px; color: #00d9ff; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+    
+    .chart-container { position: relative; height: 200px; }
+    
+    .plugins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .plugin-card { background: #1a1a2e; border-radius: 8px; padding: 12px; border: 1px solid #0f3460; }
+    .plugin-card:hover { border-color: #00d9ff; }
+    .plugin-name { font-weight: 600; color: #eee; font-size: 13px; margin-bottom: 4px; }
+    .plugin-version { font-size: 11px; color: #888; }
+    .plugin-version span { color: #00ff88; font-weight: 500; }
     
     .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
     .status-badge.online { background: #00d9ff20; color: #00d9ff; }
@@ -48,19 +65,7 @@
     .status-dot.online, .status-dot.running { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
     .status-dot.offline, .status-dot.stopped { background: #ff6b6b; }
     
-    .num { font-family: 'SF Mono', Monaco, monospace; font-weight: 600; }
-    .num.highlight { color: #00d9ff; font-size: 16px; }
-    
-    .progress-bar { width: 100%; height: 6px; background: #1a1a2e; border-radius: 3px; overflow: hidden; margin-top: 4px; }
-    .progress-bar .fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-    .progress-bar .fill.cpu { background: linear-gradient(90deg, #00d9ff, #00ff88); }
-    .progress-bar .fill.mem { background: linear-gradient(90deg, #ff9f43, #ff6b6b); }
-    
     .empty { text-align: center; padding: 40px; color: #666; }
-    
-    .version { font-size: 12px; color: #888; font-weight: normal; margin-left: 8px; }
-    .version.has-update { color: #ff9f43; cursor: pointer; }
-    .version.has-update:hover { text-decoration: underline; }
     
     .update-btn { 
       padding: 4px 12px; 
@@ -70,237 +75,40 @@
       color: #888; 
       cursor: pointer; 
       font-size: 11px; 
-      margin-left: 10px;
       transition: all 0.2s;
     }
     .update-btn:hover { border-color: #00d9ff; color: #00d9ff; }
     .update-btn.available { border-color: #ff9f43; color: #ff9f43; }
-    .update-btn.updating { opacity: 0.5; cursor: not-allowed; }
     
-    .plugins-section { background: #16213e; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-    .plugins-title { font-size: 14px; color: #00d9ff; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
-    .plugins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-    .plugin-card { background: #1a1a2e; border-radius: 8px; padding: 12px; border: 1px solid #0f3460; }
-    .plugin-card:hover { border-color: #00d9ff; }
-    .plugin-name { font-weight: 600; color: #eee; font-size: 13px; margin-bottom: 4px; }
-    .plugin-version { font-size: 11px; color: #888; }
-    .plugin-version span { color: #00ff88; }
-    
-    .plugins-section { background: #16213e; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-    .plugins-title { font-size: 14px; color: #00d9ff; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
-    .plugins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-    .plugin-card { background: #1a1a2e; border-radius: 8px; padding: 12px; border: 1px solid #0f3460; transition: all 0.2s; }
-    .plugin-card:hover { border-color: #00d9ff; transform: translateY(-2px); }
-    .plugin-name { font-weight: 600; color: #eee; font-size: 13px; margin-bottom: 4px; }
-    .plugin-version { font-size: 11px; color: #888; }
-    .plugin-version span { color: #00ff88; font-weight: 500; }
-    .plugin-status { font-size: 10px; color: #00ff88; margin-top: 4px; }
+    @media (max-width: 768px) {
+      .agent-header { grid-template-columns: 1fr; gap: 10px; }
+      .details-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>🦞 龙虾营地 <span id="version" class="version">v-</span></h1>
-    <div class="subtitle">Claw Hub - Agent 监控中心</div>
+    <h1>
+      🦞 龙虾营地
+      <span id="version" class="version-badge"></span>
+    </h1>
+    <div class="last-update">
+      <span class="ws-status disconnected" id="wsStatus">断开</span>
+      <span>更新: <span id="lastUpdate">--:--:--</span></span>
+    </div>
   </div>
   
   <div class="container">
-    <div class="toolbar">
-      <div class="last-update">
-        <span id="wsStatus" class="ws-status disconnected">未连接</span>
-        <span id="lastUpdate">--</span>
-      </div>
-      <div class="agent-filter" id="agentFilter"></div>
-    </div>
-    
-    <div class="stats-grid" id="statsGrid">
-      <div class="stat-card">
-        <div class="stat-value" id="totalAgents">0</div>
-        <div class="stat-label">在线 Agent</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="totalSessions">0</div>
-        <div class="stat-label">总会话数</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="totalTokens">0</div>
-        <div class="stat-label">今日 Token</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="avgCpu">--</div>
-        <div class="stat-label">平均 CPU</div>
-      </div>
-    </div>
-    
-    <!-- Token 消耗柱状图 -->
-    <div class="chart-section">
-      <div class="chart-title">📊 Token 消耗（半小时/区间，来自数据库）</div>
-      <div class="chart-container">
-        <canvas id="tokenChart"></canvas>
-      </div>
-    </div>
-    
-    <!-- 插件列表 -->
-    <div class="plugins-section">
-      <div class="plugins-title">🧩 已加载插件</div>
-      <div class="plugins-grid" id="pluginsGrid">
-        <div style="color:#666;font-size:12px">加载中...</div>
-      </div>
-    </div>
-    
-    <table class="agents-table">
-      <thead>
-        <tr>
-          <th>Agent</th>
-          <th>状态</th>
-          <th>Gateway</th>
-          <th>会话</th>
-          <th>今日 Token</th>
-          <th>CPU</th>
-          <th>内存</th>
-          <th>最后上线</th>
-        </tr>
-      </thead>
-      <tbody id="agentsBody">
-        <tr><td colspan="8" class="empty">连接中...</td></tr>
-      </tbody>
-    </table>
+    <div id="agentsList"></div>
   </div>
-  
+
   <script>
     let ws = null;
     let agents = [];
-    let selectedAgent = 'all';
-    let dbHistory = [];  // 从数据库拉取的历史数据
-    let tokenChart = null;
+    let expandedAgent = null;
+    let charts = {};
     let versionInfo = { version: '-', latest: '-', hasUpdate: false };
-    let agentUpdateInfo = {};  // Agent 更新信息 { agentId: { hasUpdate, latest } }
-    // 注意: 更新令牌需要从服务端获取，不能硬编码在前端
-    let updateToken = null;
-    
-    // 获取版本信息
-    async function fetchVersion() {
-      try {
-        const res = await fetch('/api/version');
-        versionInfo = await res.json();
-        const el = document.getElementById('version');
-        el.textContent = 'v' + versionInfo.version;
-        
-        if (versionInfo.hasUpdate) {
-          el.classList.add('has-update');
-          el.title = `有新版本 v${versionInfo.latest}，点击更新`;
-          el.onclick = doUpdate;
-        } else {
-          el.classList.remove('has-update');
-          el.title = '已是最新版本';
-          el.onclick = null;
-        }
-      } catch (e) {
-        document.getElementById('version').textContent = 'v-';
-      }
-    }
-    
-    // 执行更新
-    async function doUpdate() {
-      if (!versionInfo.hasUpdate) {
-        alert('已是最新版本');
-        return;
-      }
-      
-      if (!confirm(`确定更新到 v${versionInfo.latest}？\n\n更新后服务将自动重启。`)) return;
-      
-      const el = document.getElementById('version');
-      el.textContent = '更新中...';
-      
-      try {
-        // 先从服务端获取临时更新令牌
-        const tokenRes = await fetch('/api/token');
-        const tokenData = await tokenRes.json();
-        
-        if (!tokenData.token) {
-          throw new Error('无法获取更新令牌');
-        }
-        
-        const res = await fetch(`/api/update?token=${encodeURIComponent(tokenData.token)}`);
-        const result = await res.json();
-        
-        if (result.success && result.updated) {
-          el.textContent = '已更新，等待重启...';
-          // 5秒后刷新页面
-          setTimeout(() => location.reload(), 5000);
-        } else if (result.success && !result.updated) {
-          el.textContent = 'v' + versionInfo.version + ' (已是最新)';
-        } else {
-          el.textContent = '更新失败: ' + result.error;
-        }
-      } catch (e) {
-        el.textContent = '更新失败';
-        console.error('Update failed:', e);
-      }
-    }
-    
-    // 生成颜色
-    function getColor(index) {
-      const colors = ['#00d9ff', '#ff9f43', '#00ff88', '#ff6b6b', '#a55eea', '#ffd93d'];
-      return colors[index % colors.length];
-    }
-    
-    // 初始化柱状图
-    function initChart() {
-      const ctx = document.getElementById('tokenChart').getContext('2d');
-      tokenChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: [],
-          datasets: []
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: true,
-              position: 'top',
-              labels: { color: '#888', font: { size: 11 } }
-            },
-            tooltip: {
-              callbacks: {
-                label: function(ctx) {
-                  return ctx.dataset.label + ': ' + formatTokens(ctx.raw);
-                }
-              }
-            }
-          },
-          scales: {
-            x: {
-              grid: { color: '#1a1a2e' },
-              ticks: { color: '#888', maxTicksLimit: 12 }
-            },
-            y: {
-              grid: { color: '#1a1a2e' },
-              ticks: { 
-                color: '#888',
-                callback: function(v) { return formatTokens(v); }
-              },
-              beginAtZero: true
-            }
-          }
-        }
-      });
-    }
-    
-    // 从 /api/history 拉取历史数据
-    async function fetchHistory() {
-      try {
-        const agentParam = selectedAgent === 'all' ? '' : `&agent=${selectedAgent}`;
-        const res = await fetch(`/api/history?hours=6${agentParam}`);
-        const data = await res.json();
-        dbHistory = data.history || [];
-        updateChart();
-        console.log('[History] 拉取到', dbHistory.length, '个时间槽');
-      } catch (e) {
-        console.error('[History] 拉取失败:', e);
-      }
-    }
+    let agentUpdateInfo = {};
     
     // 连接 WebSocket
     function connect() {
@@ -311,8 +119,6 @@
         document.getElementById('wsStatus').className = 'ws-status connected';
         document.getElementById('wsStatus').textContent = '已连接';
         ws.send(JSON.stringify({ type: 'subscribe' }));
-        // 连接后立即拉一次历史
-        fetchHistory();
       };
       
       ws.onmessage = (event) => {
@@ -320,7 +126,7 @@
           const msg = JSON.parse(event.data);
           if (msg.type === 'agents') {
             agents = msg.payload;
-            updateUI();
+            updateAgentsList();
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
           }
         } catch (e) {
@@ -335,52 +141,164 @@
       };
     }
     
-    function updateUI() {
-      updateFilter();
-      updateStats();
-      updateChart();
-      updateTable();
-      updatePlugins();
+    // 更新 Agent 列表
+    function updateAgentsList() {
+      const container = document.getElementById('agentsList');
+      
+      if (agents.length === 0) {
+        container.innerHTML = '<div class="empty">暂无 Agent 数据</div>';
+        return;
+      }
+      
+      container.innerHTML = agents.map(agent => {
+        const isExpanded = expandedAgent === agent.id;
+        return `
+          <div class="agent-card ${isExpanded ? 'expanded' : ''}" data-agent-id="${agent.id}">
+            <div class="agent-header" onclick="toggleAgent('${agent.id}')">
+              <div class="agent-info">
+                <div class="agent-name">
+                  🦞 ${agent.name || agent.id}
+                  ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span class="update-btn available" onclick="event.stopPropagation(); doAgentUpdate('${agent.id}')">🔄 更新</span>` : ''}
+                </div>
+                <div class="agent-meta">
+                  ${agent.host || '--'} 
+                  ${agent.agentVersion ? `· Agent v${agent.agentVersion}` : ''}
+                  ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span style="color:#ff9f43"> (有更新)</span>` : ''}
+                </div>
+              </div>
+              
+              <div class="stat-box">
+                <div class="stat-value">${agent.sessions?.count || 0}</div>
+                <div class="stat-label">会话</div>
+              </div>
+              
+              <div class="stat-box">
+                <div class="stat-value">${formatTokens(agent.stats?.todayTokens)}</div>
+                <div class="stat-label">今日Token</div>
+              </div>
+              
+              <div class="stat-box">
+                <div class="stat-value">${agent.stats?.cpu?.toFixed(0) || '--'}%</div>
+                <div class="stat-label">CPU</div>
+              </div>
+              
+              <div class="stat-box">
+                <div class="stat-value">${agent.stats?.memory || '--'}%</div>
+                <div class="stat-label">内存</div>
+              </div>
+              
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+                <span class="status-badge ${agent.status}">
+                  <span class="status-dot ${agent.status}"></span>
+                  ${agent.status === 'online' ? '在线' : '离线'}
+                </span>
+                <span class="expand-icon">▼</span>
+              </div>
+            </div>
+            
+            ${isExpanded ? generateAgentDetails(agent) : ''}
+          </div>
+        `;
+      }).join('');
+      
+      // 初始化图表
+      if (expandedAgent) {
+        initAgentChart(expandedAgent);
+      }
     }
     
-    function updateFilter() {
-      const container = document.getElementById('agentFilter');
-      const onlineAgents = agents.filter(a => a.status === 'online');
+    // 生成 Agent 详情
+    function generateAgentDetails(agent) {
+      return `
+        <div class="agent-details">
+          <div class="details-grid">
+            <div class="detail-section">
+              <div class="detail-title">📊 Token 消耗（最近6小时）</div>
+              <div class="chart-container">
+                <canvas id="chart-${agent.id}"></canvas>
+              </div>
+            </div>
+            
+            <div class="detail-section">
+              <div class="detail-title">🧩 已加载插件 (${agent.plugins?.length || 0}个)</div>
+              <div class="plugins-grid">
+                ${agent.plugins && agent.plugins.length > 0 
+                  ? agent.plugins.map(p => `
+                    <div class="plugin-card">
+                      <div class="plugin-name">${p.name}</div>
+                      <div class="plugin-version">v<span>${p.version}</span></div>
+                    </div>
+                  `).join('')
+                  : '<div style="color:#666;font-size:12px">暂无插件数据</div>'
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    // 展开/收起 Agent
+    function toggleAgent(agentId) {
+      if (expandedAgent === agentId) {
+        expandedAgent = null;
+      } else {
+        expandedAgent = agentId;
+      }
+      updateAgentsList();
       
-      let html = `<button class="agent-btn ${selectedAgent === 'all' ? 'active' : ''}" onclick="selectAgent('all')">全部 (${onlineAgents.length})</button>`;
+      // 加载历史数据
+      if (expandedAgent) {
+        fetchHistory(expandedAgent);
+      }
+    }
+    
+    // 初始化 Agent 图表
+    function initAgentChart(agentId) {
+      const canvas = document.getElementById(`chart-${agentId}`);
+      if (!canvas) return;
       
-      onlineAgents.forEach(agent => {
-        const isActive = selectedAgent === agent.id;
-        html += `<button class="agent-btn ${isActive ? 'active' : ''}" onclick="selectAgent('${agent.id}')">🦞 ${agent.name}</button>`;
+      const ctx = canvas.getContext('2d');
+      
+      // 销毁旧图表
+      if (charts[agentId]) {
+        charts[agentId].destroy();
+      }
+      
+      charts[agentId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: getLast6HourSlots(),
+          datasets: [{
+            label: 'Token',
+            data: new Array(12).fill(0),
+            backgroundColor: '#00d9ff',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { 
+                color: '#888',
+                callback: (v) => formatTokens(v)
+              },
+              grid: { color: '#1a1a2e' }
+            },
+            x: {
+              ticks: { color: '#888' },
+              grid: { display: false }
+            }
+          }
+        }
       });
-      
-      container.innerHTML = html;
     }
     
-    function selectAgent(id) {
-      selectedAgent = id;
-      updateFilter();
-      fetchHistory();  // 切换 agent 时重新拉取
-    }
-    
-    function updateStats() {
-      const filtered = selectedAgent === 'all' 
-        ? agents.filter(a => a.status === 'online')
-        : agents.filter(a => a.id === selectedAgent);
-      
-      const totalSessions = filtered.reduce((sum, a) => sum + (a.sessions?.count || 0), 0);
-      const totalTokens = filtered.reduce((sum, a) => sum + (a.stats?.todayTokens || 0), 0);
-      const avgCpu = filtered.length > 0 
-        ? (filtered.reduce((sum, a) => sum + (a.stats?.cpu || 0), 0) / filtered.length).toFixed(1)
-        : '--';
-      
-      document.getElementById('totalAgents').textContent = filtered.length;
-      document.getElementById('totalSessions').textContent = totalSessions;
-      document.getElementById('totalTokens').textContent = formatTokens(totalTokens);
-      document.getElementById('avgCpu').textContent = avgCpu + '%';
-    }
-    
-    // 获取最近6小时的半小时时间槽列表
+    // 获取最近6小时的时间槽
     function getLast6HourSlots() {
       const slots = [];
       const now = new Date();
@@ -395,119 +313,85 @@
       return slots;
     }
     
-    // 更新柱状图（使用数据库数据）
-    function updateChart() {
-      const slots = getLast6HourSlots();
-      
-      // 按 agent 分组
-      const agentData = {};
-      dbHistory.forEach(h => {
-        const aid = h.agent_id;
-        if (!agentData[aid]) agentData[aid] = { name: h.agent_name, slots: {} };
-        agentData[aid].slots[h.time_slot] = h.tokens;
-      });
-      
-      // 构建数据集
-      const agentIds = Object.keys(agentData);
-      const datasets = agentIds.map((aid, index) => {
-        const ad = agentData[aid];
-        const data = slots.map(slot => ad.slots[slot] || 0);
-        const color = getColor(index);
-        return {
-          label: ad.name,
-          data,
-          backgroundColor: color + 'cc',
-          borderColor: color,
-          borderWidth: 1,
-          borderRadius: 4
-        };
-      });
-      
-      // 如果选了特定 agent，只显示那个
-      const finalDatasets = selectedAgent === 'all'
-        ? datasets
-        : datasets.filter((_, i) => agentIds[i] === selectedAgent);
-      
-      tokenChart.data.labels = slots;
-      tokenChart.data.datasets = finalDatasets;
-      tokenChart.update('none');
+    // 从 API 拉取历史数据
+    async function fetchHistory(agentId) {
+      try {
+        const res = await fetch(`/api/history?hours=6&agent=${agentId}`);
+        const data = await res.json();
+        
+        if (charts[agentId] && data.history) {
+          const slots = getLast6HourSlots();
+          const values = new Array(12).fill(0);
+          
+          data.history.forEach(h => {
+            const idx = slots.indexOf(h.time_slot);
+            if (idx >= 0) values[idx] = h.netTokens;
+          });
+          
+          charts[agentId].data.datasets[0].data = values;
+          charts[agentId].update();
+        }
+      } catch (e) {
+        console.error('[History] 拉取失败:', e);
+      }
     }
     
-    function updateTable() {
-      const tbody = document.getElementById('agentsBody');
-      const filtered = selectedAgent === 'all'
-        ? agents
-        : agents.filter(a => a.id === selectedAgent);
-      
-      if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty">无数据</td></tr>';
-        return;
-      }
-      
-      tbody.innerHTML = filtered.map(agent => `
-        <tr>
-          <td>
-            <div style="font-weight:600">
-              🦞 ${agent.name || agent.id}
-              ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span class="update-btn" onclick="doAgentUpdate('${agent.id}')" title="更新到 v${agentUpdateInfo[agent.id].latestVersion}">🔄</span>` : ''}
-            </div>
-            <div style="font-size:11px;color:#888">
-              ${agent.host || '--'} 
-              ${agent.agentVersion ? `· Agent v${agent.agentVersion}` : ''}
-              ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span style="color:#ff6b6b"> (有更新)</span>` : ''}
-            </div>
-          </td>
-          <td>
-            <span class="status-badge ${agent.status}">
-              <span class="status-dot ${agent.status}"></span>
-              ${agent.status === 'online' ? '在线' : '离线'}
-            </span>
-          </td>
-          <td>
-            <span class="status-badge ${agent.gateway?.status || 'stopped'}">
-              <span class="status-dot ${agent.gateway?.status || 'stopped'}"></span>
-              ${agent.gateway?.status || '--'}
-            </span>
-          </td>
-          <td>
-            <div class="num">${agent.sessions?.count || 0}</div>
-            <div style="font-size:11px;color:#888">今日 ${agent.sessions?.todayActive || 0}</div>
-          </td>
-          <td>
-            <div class="num highlight">${formatTokens(agent.stats?.todayTokens)}</div>
-          </td>
-          <td style="min-width:80px">
-            <div class="num">${agent.stats?.cpu?.toFixed(0) || '--'}%</div>
-            <div class="progress-bar"><div class="fill cpu" style="width:${Math.min(agent.stats?.cpu || 0, 100)}%"></div></div>
-          </td>
-          <td style="min-width:80px">
-            <div class="num">${agent.stats?.memory || '--'}%</div>
-            <div class="progress-bar"><div class="fill mem" style="width:${Math.min(agent.stats?.memory || 0, 100)}%"></div></div>
-          </td>
-          <td>${formatTime(agent.lastSeen)}</td>
-        </tr>
-      `).join('');
+    // 格式化 Token 数量
+    function formatTokens(n) {
+      if (!n || n === 0) return '0';
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return n.toString();
     }
     
-    // 更新插件列表
-    function updatePlugins() {
-      const container = document.getElementById('pluginsGrid');
-      
-      // 从第一个在线 agent 获取插件列表
-      const onlineAgent = agents.find(a => a.status === 'online' && a.plugins);
-      
-      if (!onlineAgent || !onlineAgent.plugins || onlineAgent.plugins.length === 0) {
-        container.innerHTML = '<div style="color:#666;font-size:12px">暂无插件数据</div>';
-        return;
+    // 获取版本信息
+    async function fetchVersion() {
+      try {
+        const res = await fetch('/api/version');
+        versionInfo = await res.json();
+        const el = document.getElementById('version');
+        el.textContent = `v${versionInfo.version}`;
+        el.className = `version-badge ${versionInfo.hasUpdate ? 'has-update' : ''}`;
+        if (versionInfo.hasUpdate) {
+          el.title = `点击更新到 v${versionInfo.latest}`;
+          el.onclick = doUpdate;
+        }
+      } catch (e) {
+        console.error('[Version] 获取失败:', e);
       }
+    }
+    
+    // 执行 Hub 更新
+    async function doUpdate() {
+      if (!versionInfo.hasUpdate) return;
+      if (!confirm(`确定更新到 v${versionInfo.latest}？\n\n更新后服务将自动重启。`)) return;
       
-      container.innerHTML = onlineAgent.plugins.map(plugin => `
-        <div class="plugin-card">
-          <div class="plugin-name">${plugin.name}</div>
-          <div class="plugin-version">v<span>${plugin.version}</span></div>
-          ${plugin.source ? `<div class="plugin-status">${plugin.source.includes('stock') ? '📦 内置' : '🔧 自定义'}</div>` : ''}
-        </div>
-      `).join('');
+      const el = document.getElementById('version');
+      el.textContent = '更新中...';
+      
+      try {
+        const tokenRes = await fetch('/api/token');
+        const tokenData = await tokenRes.json();
+        
+        if (!tokenData.token) {
+          throw new Error('无法获取更新令牌');
+        }
+        
+        const res = await fetch(`/api/update?token=${encodeURIComponent(tokenData.token)}`);
+        const result = await res.json();
+        
+        if (result.success && result.updated) {
+          el.textContent = '已更新，等待重启...';
+          setTimeout(() => location.reload(), 5000);
+        } else if (result.success && !result.updated) {
+          el.textContent = 'v' + versionInfo.version + ' (已是最新)';
+        } else {
+          el.textContent = '更新失败: ' + result.error;
+        }
+      } catch (e) {
+        el.textContent = '更新失败';
+        console.error('Update failed:', e);
+      }
     }
     
     // 检查 Agent 更新
@@ -516,7 +400,7 @@
         const res = await fetch(`/api/agent/check-update?agent=${agentId}`);
         const data = await res.json();
         agentUpdateInfo[agentId] = data;
-        updateTable();
+        updateAgentsList();
       } catch (e) {
         console.error('[Agent Update] 检查失败:', e);
       }
@@ -556,36 +440,16 @@
     
     // 定期检查所有在线 Agent 的更新
     function checkAllAgentUpdates() {
-      agents.filter(a => a.status === 'online').forEach(a => checkAgentUpdate(a.id));
+      agents.filter(a => a.status === 'online').forEach(a => {
+        checkAgentUpdate(a.id);
+      });
     }
     
-    function formatTime(ts) {
-      if (!ts) return '--';
-      const d = new Date(ts);
-      const now = new Date();
-      const diff = now - d;
-      if (diff < 60000) return '刚刚';
-      if (diff < 3600000) return Math.floor(diff/60000) + '分钟前';
-      return d.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
-    }
-    
-    function formatTokens(n) {
-      if (!n) return '0';
-      if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
-      if (n >= 1000) return (n/1000).toFixed(1) + 'K';
-      return n.toString();
-    }
-    
-    // 定期刷新历史数据
-    setInterval(fetchHistory, 60000);
-    
-    // 定期检查 Agent 更新（每5分钟）
-    setInterval(checkAllAgentUpdates, 300000);
-    
-    initChart();
+    // 初始化
     connect();
-    fetchVersion();  // 获取版本信息
-    checkAllAgentUpdates();  // 启动时检查一次
+    fetchVersion();
+    setTimeout(checkAllAgentUpdates, 2000);
+    setInterval(checkAllAgentUpdates, 300000);
   </script>
 </body>
 </html>
