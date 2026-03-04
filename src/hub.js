@@ -362,6 +362,63 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 检查 Agent 是否需要更新
+  if (req.url.startsWith('/api/agent/check-update')) {
+    const url = new URL(req.url, 'http://x');
+    const agentId = url.searchParams.get('agent') || 'main';
+    
+    const agent = agents.get(agentId);
+    if (!agent) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Agent not found' }));
+      return;
+    }
+    
+    // 获取最新版本
+    getLatestVersion().then(latest => {
+      const current = agent.agentVersion || '0.0.0';
+      const hasUpdate = latest > current;
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        agentId,
+        currentVersion: current,
+        latestVersion: latest,
+        hasUpdate,
+        repo: GITHUB_REPO
+      }));
+    });
+    return;
+  }
+
+  // 触发 Agent 更新
+  if (req.url.startsWith('/api/agent/update')) {
+    const url = new URL(req.url, 'http://x');
+    const agentId = url.searchParams.get('agent') || 'main';
+    const token = url.searchParams.get('token');
+    
+    // 验证 token
+    if (token !== UPDATE_TOKEN) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid token' }));
+      return;
+    }
+    
+    const agent = agents.get(agentId);
+    if (!agent || !agent.ws) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Agent not found or offline' }));
+      return;
+    }
+    
+    // 发送更新命令到 Agent
+    agent.ws.send(JSON.stringify({ type: 'update', payload: { token } }));
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: 'Update command sent' }));
+    return;
+  }
+
   res.writeHead(404); res.end('Not Found');
 });
 
@@ -403,13 +460,20 @@ function handleMessage(ws, msg, setAgentId) {
   switch (type) {
     case 'register': {
       const agent = {
-        id: payload.id, name: payload.name || payload.id,
-        host: payload.host, status: 'online',
-        lastSeen: Date.now(), gateway: null, sessions: [], stats: null
+        id: payload.id,
+        name: payload.name || payload.id,
+        host: payload.host,
+        agentVersion: payload.agentVersion,  // Agent 版本
+        status: 'online',
+        lastSeen: Date.now(),
+        gateway: null,
+        sessions: [],
+        stats: null,
+        ws  // 保存 WebSocket 连接
       };
       agents.set(payload.id, agent);
       setAgentId(payload.id);
-      console.log(`[Hub] Agent 注册: ${agent.name} @ ${agent.host}`);
+      console.log(`[Hub] Agent 注册: ${agent.name} @ ${agent.host} (v${payload.agentVersion || 'N/A'})`);
       ws.send(JSON.stringify({ type: 'registered', payload: { id: payload.id } }));
       broadcastToClients();
       break;
@@ -439,6 +503,11 @@ function handleMessage(ws, msg, setAgentId) {
         broadcastToClients();
       }
       break;
+    
+    case 'update-result':
+      // Agent 更新结果
+      console.log(`[Hub] Agent ${payload.id} 更新结果:`, payload);
+      break;
   }
 }
 
@@ -448,18 +517,13 @@ function broadcastToClients() {
 }
 
 function getAgentList() {
-  return Array.from(agents.values()).map(a => ({
-    id: a.id,
-    name: a.name,
-    host: a.host,
-    agentVersion: a.agentVersion,  // Agent 版本
-    status: a.status,
-    lastSeen: a.lastSeen,
-    gateway: a.gateway,
-    sessions: a.sessions,
-    stats: a.stats,
-    plugins: a.plugins || []  // 插件列表
-  }));
+  return Array.from(agents.values()).map(a => {
+    const { ws, ...agentData } = a;  // 排除 ws 字段
+    return {
+      ...agentData,
+      plugins: a.plugins || []
+    };
+  });
 }
 
 setInterval(() => {

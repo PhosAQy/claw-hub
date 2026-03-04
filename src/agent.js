@@ -22,6 +22,7 @@ const path = require('path');
 // Agent 信息
 const AGENT_NAME = '龙虾营地 Agent';
 const AGENT_VERSION = '1.0.0';
+const GITHUB_REPO = 'https://github.com/PhosAQy/claw-hub';
 
 // 配置
 const CONFIG = {
@@ -31,7 +32,8 @@ const CONFIG = {
   reportInterval: 5000,  // 上报间隔
   gatewayPort: 18789,    // Gateway 端口
   gatewayToken: process.env.CLAW_GATEWAY_TOKEN || '',  // Gateway Token (从环境变量读取)
-  sessionsDir: path.join(os.homedir(), '.openclaw/agents/main/sessions')
+  sessionsDir: path.join(os.homedir(), '.openclaw/agents/main/sessions'),
+  updateToken: process.env.CLAW_UPDATE_TOKEN || ''  // 更新令牌
 };
 
 let ws = null;
@@ -229,6 +231,65 @@ function getPlugins() {
   }
 }
 
+// ──────────────────────────────────────────────
+// 版本管理和更新
+// ──────────────────────────────────────────────
+
+/**
+ * 获取最新版本（从 GitHub tags）
+ */
+async function getLatestVersion() {
+  return new Promise((resolve) => {
+    exec('git ls-remote --tags origin', { timeout: 10000 }, (err, stdout) => {
+      if (err) {
+        resolve(AGENT_VERSION);
+        return;
+      }
+      
+      const tags = stdout.split('\n')
+        .filter(line => line.includes('refs/tags/'))
+        .map(line => line.split('refs/tags/')[1])
+        .filter(tag => tag && tag.startsWith('v'))
+        .sort((a, b) => b.localeCompare(a));
+      
+      resolve(tags[0] ? tags[0].replace('v', '') : AGENT_VERSION);
+    });
+  });
+}
+
+/**
+ * 执行更新
+ */
+async function doUpdate() {
+  return new Promise((resolve) => {
+    const projectDir = path.join(__dirname, '..');
+    
+    exec('git pull', { cwd: projectDir, timeout: 30000 }, (err, stdout, stderr) => {
+      if (err) {
+        resolve({ success: false, error: stderr || err.message });
+        return;
+      }
+      
+      const updated = !stdout.includes('Already up to date');
+      
+      if (updated) {
+        // 更新成功，准备重启
+        console.log('[Agent] 更新成功，即将重启...');
+        setTimeout(() => {
+          process.exit(0);  // 退出进程，依赖外部进程管理器重启
+        }, 1000);
+      }
+      
+      resolve({
+        success: true,
+        updated,
+        message: updated ? '更新成功，即将重启' : '已是最新版本',
+        version: AGENT_VERSION
+      });
+    });
+  });
+}
+
 // 发送消息
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -291,6 +352,10 @@ function connect() {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'registered') {
         console.log(`[Agent] 注册成功: ${msg.payload.id}`);
+      } else if (msg.type === 'update') {
+        // 收到更新命令
+        console.log('[Agent] 收到更新命令');
+        handleUpdate(msg.payload?.token);
       }
     } catch (e) {
       console.error('[Agent] 解析消息失败:', e.message);
@@ -306,6 +371,19 @@ function connect() {
   ws.on('error', (err) => {
     console.error('[Agent] 连接错误:', err.message);
   });
+}
+
+// 处理更新
+async function handleUpdate(token) {
+  // 验证 token（可选）
+  if (CONFIG.updateToken && token !== CONFIG.updateToken) {
+    console.log('[Agent] 更新令牌无效');
+    send({ type: 'update-result', payload: { success: false, error: 'Invalid token' } });
+    return;
+  }
+  
+  const result = await doUpdate();
+  send({ type: 'update-result', payload: result });
 }
 
 // 启动

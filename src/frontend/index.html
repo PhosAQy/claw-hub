@@ -173,6 +173,7 @@
     let dbHistory = [];  // 从数据库拉取的历史数据
     let tokenChart = null;
     let versionInfo = { version: '-', latest: '-', hasUpdate: false };
+    let agentUpdateInfo = {};  // Agent 更新信息 { agentId: { hasUpdate, latest } }
     // 注意: 更新令牌需要从服务端获取，不能硬编码在前端
     let updateToken = null;
     
@@ -446,8 +447,15 @@
       tbody.innerHTML = filtered.map(agent => `
         <tr>
           <td>
-            <div style="font-weight:600">🦞 ${agent.name || agent.id}</div>
-            <div style="font-size:11px;color:#888">${agent.host || '--'} ${agent.agentVersion ? '· Agent v' + agent.agentVersion : ''}</div>
+            <div style="font-weight:600">
+              🦞 ${agent.name || agent.id}
+              ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span class="update-btn" onclick="doAgentUpdate('${agent.id}')" title="更新到 v${agentUpdateInfo[agent.id].latestVersion}">🔄</span>` : ''}
+            </div>
+            <div style="font-size:11px;color:#888">
+              ${agent.host || '--'} 
+              ${agent.agentVersion ? `· Agent v${agent.agentVersion}` : ''}
+              ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span style="color:#ff6b6b"> (有更新)</span>` : ''}
+            </div>
           </td>
           <td>
             <span class="status-badge ${agent.status}">
@@ -502,6 +510,55 @@
       `).join('');
     }
     
+    // 检查 Agent 更新
+    async function checkAgentUpdate(agentId) {
+      try {
+        const res = await fetch(`/api/agent/check-update?agent=${agentId}`);
+        const data = await res.json();
+        agentUpdateInfo[agentId] = data;
+        updateTable();
+      } catch (e) {
+        console.error('[Agent Update] 检查失败:', e);
+      }
+    }
+    
+    // 更新 Agent
+    async function doAgentUpdate(agentId) {
+      const updateInfo = agentUpdateInfo[agentId];
+      if (!updateInfo || !updateInfo.hasUpdate) {
+        alert('Agent 已是最新版本');
+        return;
+      }
+      
+      if (!confirm(`确定更新 Agent ${agentId} 到 v${updateInfo.latestVersion}？\n\n更新后 Agent 将自动重启。`)) return;
+      
+      const tokenRes = await fetch('/api/token');
+      const tokenData = await tokenRes.json();
+      
+      if (!tokenData.token) {
+        alert('无法获取更新令牌');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/agent/update?agent=${agentId}&token=${encodeURIComponent(tokenData.token)}`);
+        const result = await res.json();
+        
+        if (result.success) {
+          alert('✅ 更新命令已发送，Agent 将在几秒后重启');
+        } else {
+          alert('❌ 更新失败: ' + result.error);
+        }
+      } catch (e) {
+        alert('❌ 更新失败: ' + e.message);
+      }
+    }
+    
+    // 定期检查所有在线 Agent 的更新
+    function checkAllAgentUpdates() {
+      agents.filter(a => a.status === 'online').forEach(a => checkAgentUpdate(a.id));
+    }
+    
     function formatTime(ts) {
       if (!ts) return '--';
       const d = new Date(ts);
@@ -522,9 +579,13 @@
     // 定期刷新历史数据
     setInterval(fetchHistory, 60000);
     
+    // 定期检查 Agent 更新（每5分钟）
+    setInterval(checkAllAgentUpdates, 300000);
+    
     initChart();
     connect();
     fetchVersion();  // 获取版本信息
+    checkAllAgentUpdates();  // 启动时检查一次
   </script>
 </body>
 </html>
