@@ -1,6 +1,6 @@
 {
   "name": "claw-hub",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "🦞 OpenClaw Agent 监控系统 - 实时监控 Agent 状态、Token 消耗、Gateway 健康度",
   "main": "src/hub.js",
   "scripts": {
@@ -10,7 +10,12 @@
     "update": "git pull && npm install",
     "restart": "pkill -f 'node.*hub.js' && sleep 1 && node src/hub.js &"
   },
-  "keywords": ["openclaw", "monitoring", "agent", "token-usage"],
+  "keywords": [
+    "openclaw",
+    "monitoring",
+    "agent",
+    "token-usage"
+  ],
   "author": "Phosa",
   "license": "MIT",
   "repository": {
