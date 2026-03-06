@@ -193,12 +193,22 @@ function getTokenUsage(hours = 6) {
 function getSystemStats() {
   let cpu = 0, memory = 0;
   
-  // 获取 CPU（单独 try，避免整体失败）
+  // 获取 CPU（兼容 macOS 和 Linux）
   try {
-    const cpuInfo = execSync('top -l 1 -n 0 | grep "CPU usage" 2>/dev/null || echo ""', {
-      encoding: 'utf-8',
-      timeout: 3000
-    });
+    let cpuInfo = '';
+    if (process.platform === 'darwin') {
+      // macOS
+      cpuInfo = execSync('top -l 1 -n 0 | grep "CPU usage" 2>/dev/null || echo ""', {
+        encoding: 'utf-8',
+        timeout: 3000
+      });
+    } else {
+      // Linux
+      cpuInfo = execSync('grep "cpu " /proc/stat | head -1 2>/dev/null || echo ""', {
+        encoding: 'utf-8',
+        timeout: 3000
+      });
+    }
     const cpuMatch = cpuInfo.match(/(\d+\.?\d*)\s*%/);
     if (cpuMatch) cpu = parseFloat(cpuMatch[1]);
   } catch (e) {}
