@@ -1074,6 +1074,8 @@ const server = http.createServer((req, res) => {
             agentVersion: agent.agentVersion,
             status: agent.status,
             lastSeen: agent.lastSeen,
+            uptime: agent.uptime,      // 运行时长（秒）
+            startTime: agent.startTime, // 启动时间
             sessions: agent.sessions || [],
             stats: agent.stats
           };
