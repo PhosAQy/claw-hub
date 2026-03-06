@@ -2030,8 +2030,18 @@
           badge.textContent = '● 在线';
           if (btn) { btn.disabled = false; btn.textContent = '🔄 刷新'; }
 
+          // 兼容 sessions 是对象或数组
+          let sessionCount = 0;
           let totalTokens = 0;
-          if (agent.sessions) agent.sessions.forEach(s => totalTokens += (s.tokens || 0));
+          if (agent.sessions) {
+            if (Array.isArray(agent.sessions)) {
+              sessionCount = agent.sessions.length;
+              agent.sessions.forEach(s => totalTokens += (s.tokens || 0));
+            } else if (agent.sessions.list) {
+              sessionCount = agent.sessions.count || agent.sessions.list.length;
+              agent.sessions.list.forEach(s => totalTokens += (s.tokens || 0));
+            }
+          }
 
           detail.innerHTML = `
             <div class="agent-connect-info">
@@ -2049,7 +2059,7 @@
               </div>
               <div class="agent-connect-row">
                 <span class="agent-connect-label">活跃会话</span>
-                <span class="agent-connect-value">${agent.sessions?.length || 0} 个</span>
+                <span class="agent-connect-value">${sessionCount} 个</span>
               </div>
               <div class="agent-connect-row">
                 <span class="agent-connect-label">今日 Token</span>
