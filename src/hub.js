@@ -9,7 +9,6 @@ const mysql = require('mysql2/promise');
 const { execSync, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const { registerChatRoutes } = require('./chat-routes');
 
 // 加载 .env 文件（如果存在）
 const envPath = path.join(__dirname, '..', '.env');
@@ -1098,6 +1097,298 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ──────────────────────────────────────────────
+  // 聊天 API
+  // ──────────────────────────────────────────────
+
+  // 获取会话列表
+  if (req.url === '/api/chat/conversations' && req.method === 'GET') {
+    (async () => {
+      try {
+        const campKey = req.headers['x-camp-key'];
+        
+        const [users] = await pool.query(
+          'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+          [campKey]
+        );
+        if (!users.length) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '未授权' }));
+          return;
+        }
+        const userId = users[0].user_id;
+        
+        const [conversations] = await pool.query(`
+          SELECT c.*, 
+                 cm.role,
+                 (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.conversation_id AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01')) as unread_count,
+                 (SELECT content FROM messages m WHERE m.conversation_id = c.conversation_id ORDER BY created_at DESC LIMIT 1) as last_message,
+                 (SELECT created_at FROM messages m WHERE m.conversation_id = c.conversation_id ORDER BY created_at DESC LIMIT 1) as last_message_at
+          FROM conversations c
+          JOIN conversation_members cm ON c.conversation_id = cm.conversation_id
+          WHERE cm.user_id = ? AND c.is_active = TRUE
+          ORDER BY COALESCE(last_message_at, c.created_at) DESC
+        `, [userId]);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, conversations }));
+      } catch (e) {
+        console.error('[Chat] 获取会话列表失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '获取会话列表失败' }));
+      }
+    })();
+    return;
+  }
+
+  // 创建会话
+  if (req.url === '/api/chat/conversation' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { type, targetUserId, botId, name } = JSON.parse(body);
+        const campKey = req.headers['x-camp-key'];
+        
+        const [users] = await pool.query(
+          'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+          [campKey]
+        );
+        if (!users.length) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '未授权' }));
+          return;
+        }
+        const userId = users[0].user_id;
+        
+        let conversationType = type;
+        let members = [userId];
+        let conversationName = name;
+        
+        if (type === 'direct' && targetUserId) {
+          members.push(targetUserId);
+          const [existing] = await pool.query(`
+            SELECT c.* FROM conversations c
+            JOIN conversation_members m1 ON c.conversation_id = m1.conversation_id
+            JOIN conversation_members m2 ON c.conversation_id = m2.conversation_id
+            WHERE c.type = 'direct' AND m1.user_id = ? AND m2.user_id = ?
+          `, [userId, targetUserId]);
+          
+          if (existing.length > 0) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, conversation: existing[0] }));
+            return;
+          }
+          
+          const [targetUsers] = await pool.query('SELECT username FROM users WHERE user_id = ?', [targetUserId]);
+          conversationName = targetUsers[0]?.username || '聊天';
+        } else if (type === 'bot' && botId) {
+          conversationType = 'bot';
+          members.push(botId);
+          const [bots] = await pool.query('SELECT name FROM bots WHERE bot_id = ? AND is_active = TRUE', [botId]);
+          conversationName = bots[0]?.name || 'Bot';
+        }
+        
+        const crypto = require('crypto');
+        const conversationId = 'conv_' + crypto.randomBytes(8).toString('hex');
+        await pool.query(
+          'INSERT INTO conversations (conversation_id, type, name, created_by) VALUES (?, ?, ?, ?)',
+          [conversationId, conversationType, conversationName, userId]
+        );
+        
+        for (const memberId of members) {
+          const role = memberId === userId ? 'owner' : 'member';
+          await pool.query(
+            'INSERT INTO conversation_members (conversation_id, user_id, role) VALUES (?, ?, ?)',
+            [conversationId, memberId, role]
+          );
+        }
+        
+        const [conversations] = await pool.query('SELECT * FROM conversations WHERE conversation_id = ?', [conversationId]);
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, conversation: conversations[0] }));
+      } catch (e) {
+        console.error('[Chat] 创建会话失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '创建会话失败' }));
+      }
+    });
+    return;
+  }
+
+  // 发送消息
+  if (req.url === '/api/chat/message' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { conversationId, content, messageType = 'text', replyTo } = JSON.parse(body);
+        const campKey = req.headers['x-camp-key'];
+        
+        const [users] = await pool.query(
+          'SELECT user_id, username FROM users WHERE camp_key = ? AND is_active = TRUE',
+          [campKey]
+        );
+        if (!users.length) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '未授权' }));
+          return;
+        }
+        const userId = users[0].user_id;
+        
+        const [members] = await pool.query(
+          'SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?',
+          [conversationId, userId]
+        );
+        if (!members.length) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '无权发送消息' }));
+          return;
+        }
+        
+        const crypto = require('crypto');
+        const messageId = 'msg_' + crypto.randomBytes(8).toString('hex');
+        await pool.query(
+          'INSERT INTO messages (message_id, conversation_id, sender_id, sender_type, content, message_type, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [messageId, conversationId, userId, 'user', content, messageType, replyTo || null]
+        );
+        
+        const [messages] = await pool.query('SELECT * FROM messages WHERE message_id = ?', [messageId]);
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: messages[0] }));
+      } catch (e) {
+        console.error('[Chat] 发送消息失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '发送消息失败' }));
+      }
+    });
+    return;
+  }
+
+  // 获取消息历史
+  if (req.url.match(/^\/api\/chat\/messages\/conv_[a-z0-9]+$/) && req.method === 'GET') {
+    (async () => {
+      try {
+        const url = new URL(req.url, 'http://localhost');
+        const conversationId = url.pathname.split('/').pop();
+        const limit = parseInt(url.searchParams.get('limit') || '50');
+        const before = url.searchParams.get('before');
+        const campKey = req.headers['x-camp-key'];
+        
+        const [users] = await pool.query(
+          'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+          [campKey]
+        );
+        if (!users.length) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '未授权' }));
+          return;
+        }
+        const userId = users[0].user_id;
+        
+        const [members] = await pool.query(
+          'SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?',
+          [conversationId, userId]
+        );
+        if (!members.length) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '无权查看消息' }));
+          return;
+        }
+        
+        let query = `
+          SELECT m.*, u.username as sender_name
+          FROM messages m
+          LEFT JOIN users u ON m.sender_id = u.user_id
+          WHERE m.conversation_id = ? AND m.is_deleted = FALSE
+        `;
+        const params = [conversationId];
+        
+        if (before) {
+          query += ' AND m.created_at < (SELECT created_at FROM messages WHERE message_id = ?)';
+          params.push(before);
+        }
+        
+        query += ' ORDER BY m.created_at DESC LIMIT ?';
+        params.push(limit);
+        
+        const [messages] = await pool.query(query, params);
+        
+        await pool.query(
+          'UPDATE conversation_members SET last_read_at = NOW() WHERE conversation_id = ? AND user_id = ?',
+          [conversationId, userId]
+        );
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, messages: messages.reverse() }));
+      } catch (e) {
+        console.error('[Chat] 获取消息失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '获取消息失败' }));
+      }
+    })();
+    return;
+  }
+
+  // 创建群聊
+  if (req.url === '/api/chat/group' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { name, memberIds = [] } = JSON.parse(body);
+        const campKey = req.headers['x-camp-key'];
+        
+        if (!name) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '群名称不能为空' }));
+          return;
+        }
+        
+        const [users] = await pool.query(
+          'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+          [campKey]
+        );
+        if (!users.length) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '未授权' }));
+          return;
+        }
+        const userId = users[0].user_id;
+        
+        const crypto = require('crypto');
+        const conversationId = 'conv_' + crypto.randomBytes(8).toString('hex');
+        await pool.query(
+          'INSERT INTO conversations (conversation_id, type, name, created_by) VALUES (?, ?, ?, ?)',
+          [conversationId, 'group', name, userId]
+        );
+        
+        await pool.query(
+          'INSERT INTO conversation_members (conversation_id, user_id, role) VALUES (?, ?, ?)',
+          [conversationId, userId, 'owner']
+        );
+        
+        for (const memberId of memberIds) {
+          if (memberId !== userId) {
+            await pool.query(
+              'INSERT INTO conversation_members (conversation_id, user_id, role) VALUES (?, ?, ?)',
+              [conversationId, memberId, 'member']
+            );
+          }
+        }
+        
+        const [conversations] = await pool.query('SELECT * FROM conversations WHERE conversation_id = ?', [conversationId]);
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, conversation: conversations[0] }));
+      } catch (e) {
+        console.error('[Chat] 创建群聊失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '创建群聊失败' }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404); res.end('Not Found');
 });
 
@@ -1265,11 +1556,6 @@ setInterval(() => {
 
 async function start() {
   await initDB();
-  
-  // 注册聊天路由
-  registerChatRoutes(server, pool, agents);
-  console.log('[Chat] 聊天路由已注册');
-  
   server.listen(PORT, () => {
     console.log(`🦞 龙虾营地 Hub`);
     console.log(`   WebSocket: ws://localhost:${PORT}`);
