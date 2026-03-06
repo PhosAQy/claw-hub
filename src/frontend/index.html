@@ -428,9 +428,633 @@
       color: #ff6b6b;
     }
     
+    /* 登录模态框 */
+    .login-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .login-modal.show {
+      display: flex;
+    }
+    
+    .login-content {
+      background: #16213e;
+      border-radius: 16px;
+      padding: 40px;
+      width: 400px;
+      max-width: 90%;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    
+    .login-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .login-header h2 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .login-subtitle {
+      color: #888;
+      font-size: 14px;
+    }
+    
+    .login-tabs {
+      display: flex;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #0f3460;
+    }
+    
+    .login-tab {
+      flex: 1;
+      background: none;
+      border: none;
+      color: #888;
+      padding: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.3s;
+    }
+    
+    .login-tab.active {
+      color: #00d9ff;
+      border-bottom-color: #00d9ff;
+    }
+    
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .login-form input {
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #eee;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    
+    .login-form input:focus {
+      outline: none;
+      border-color: #00d9ff;
+    }
+    
+    .login-btn {
+      background: linear-gradient(135deg, #00d9ff 0%, #00a8cc 100%);
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .login-btn:hover {
+      transform: translateY(-2px);
+    }
+    
+    .login-error {
+      color: #ff6b6b;
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+      display: none;
+    }
+    
+    .login-error.show {
+      display: block;
+    }
+    
+    /* Header 用户信息 */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    #userName {
+      color: #00d9ff;
+      font-weight: 600;
+    }
+    
+    .key-btn, .logout-btn, .login-header-btn {
+      background: #0f3460;
+      border: 1px solid #00d9ff;
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #00d9ff;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .key-btn:hover, .logout-btn:hover, .login-header-btn:hover {
+      background: #00d9ff;
+      color: #16213e;
+    }
+    
+    /* Key 模态框 */
+    .key-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .key-modal.show {
+      display: flex;
+    }
+    
+    .key-content {
+      background: #16213e;
+      border-radius: 16px;
+      width: 600px;
+      max-width: 90%;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    
+    .key-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 30px;
+      border-bottom: 1px solid #0f3460;
+    }
+    
+    .key-header h3 {
+      font-size: 18px;
+    }
+    
+    .modal-close {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    
+    .modal-close:hover {
+      color: #ff6b6b;
+    }
+    
+    .key-body {
+      padding: 30px;
+    }
+    
+    .key-info label {
+      display: block;
+      margin-bottom: 10px;
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .key-display {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .key-display input {
+      flex: 1;
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 12px;
+      color: #00d9ff;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+    }
+    
+    .copy-btn {
+      background: #00d9ff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      color: #16213e;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .copy-btn:hover {
+      background: #00a8cc;
+    }
+    
+    .key-usage {
+      margin-top: 30px;
+    }
+    
+    .key-usage h4 {
+      margin-bottom: 15px;
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .key-usage pre {
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+    }
+    
+    .key-usage code {
+      color: #eee;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+    }
+    
+    .key-usage #keyPlaceholder {
+      color: #00d9ff;
+      font-weight: 600;
+    }
+    
+    .key-section {
+      margin-bottom: 30px;
+    }
+    
+    .key-section h4 {
+      margin-bottom: 15px;
+      color: #888;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .bot-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .bot-item {
+      display: flex;
+      flex-direction: column;
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 15px;
+      border: 1px solid #0f3460;
+      transition: all 0.2s;
+    }
+    
+    .bot-item:hover {
+      border-color: #00d9ff;
+    }
+
+    .bot-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .bot-status-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .bot-status-badge.connected {
+      background: rgba(0, 217, 100, 0.15);
+      color: #00d964;
+    }
+    .bot-status-badge.disconnected {
+      background: rgba(150, 150, 150, 0.15);
+      color: #888;
+    }
+    .bot-status-badge.checking {
+      background: rgba(255, 193, 7, 0.15);
+      color: #ffc107;
+    }
+
+    .connect-btn {
+      background: rgba(0, 217, 255, 0.1) !important;
+      color: #00d9ff !important;
+      border-color: rgba(0, 217, 255, 0.3) !important;
+    }
+    .connect-btn:hover {
+      background: rgba(0, 217, 255, 0.2) !important;
+    }
+
+    .bot-connect-detail {
+      margin-top: 12px;
+      border-top: 1px solid #0f3460;
+      padding-top: 12px;
+    }
+
+    .agent-connect-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .agent-connect-info.not-connected {
+      display: block;
+      color: #888;
+      font-size: 13px;
+    }
+    .agent-connect-info.not-connected p {
+      margin: 4px 0;
+    }
+    .agent-connect-info.not-connected code {
+      background: rgba(255,255,255,0.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    .connect-hint {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 11px;
+      color: #aaa;
+      overflow-x: auto;
+      margin-top: 8px;
+      white-space: pre;
+    }
+    .agent-connect-row {
+      background: rgba(255,255,255,0.03);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .agent-connect-label {
+      display: block;
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 3px;
+    }
+    .agent-connect-value {
+      font-size: 13px;
+      color: #ccc;
+      font-weight: 500;
+    }
+    
+    .bot-info {
+      flex: 1;
+    }
+    
+    .bot-name {
+      font-weight: 600;
+      color: #eee;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    
+    .bot-meta {
+      font-size: 12px;
+      color: #888;
+    }
+    
+    .bot-actions {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .login-subtitle {
+      color: #888;
+      font-size: 14px;
+    }
+    
+    textarea {
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #eee;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.3s;
+      width: 100%;
+    }
+    
+    textarea:focus {
+      outline: none;
+      border-color: #00d9ff;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+      font-size: 14px;
+    }
+    
+    /* 欢迎页面 */
+    .welcome-page {
+      padding: 60px 20px;
+      text-align: center;
+    }
+    
+    .welcome-content h2 {
+      font-size: 36px;
+      margin-bottom: 20px;
+      color: #00d9ff;
+    }
+    
+    .welcome-desc {
+      font-size: 18px;
+      color: #888;
+      margin-bottom: 60px;
+    }
+    
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 30px;
+      margin-bottom: 60px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    .feature-item {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 30px;
+      border: 1px solid #0f3460;
+      transition: all 0.3s;
+    }
+    
+    .feature-item:hover {
+      border-color: #00d9ff;
+      transform: translateY(-5px);
+    }
+    
+    .feature-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+    
+    .feature-item h3 {
+      font-size: 18px;
+      margin-bottom: 10px;
+      color: #eee;
+    }
+    
+    .feature-item p {
+      font-size: 14px;
+      color: #888;
+    }
+    
+    .cta-section {
+      margin-top: 40px;
+    }
+    
+    .login-btn-large {
+      background: linear-gradient(135deg, #00d9ff 0%, #00a8cc 100%);
+      border: none;
+      border-radius: 30px;
+      padding: 16px 40px;
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .login-btn-large:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 30px rgba(0, 217, 255, 0.3);
+    }
+    
+    /* Bot 管理页面 */
+    .bot-management {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    
+    .section-header h2 {
+      font-size: 24px;
+      color: #eee;
+    }
+    
+    .section-header h3 {
+      font-size: 18px;
+      color: #eee;
+    }
+    
+    .quick-start {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 30px;
+      border: 1px solid #0f3460;
+    }
+    
+    .quick-start h3 {
+      margin-bottom: 15px;
+      color: #00d9ff;
+    }
+    
+    .quick-start ol {
+      text-align: left;
+      line-height: 2;
+      padding-left: 20px;
+    }
+    
+    .quick-start li {
+      margin-bottom: 10px;
+      color: #ccc;
+    }
+    
+    .quick-start pre {
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 10px 0;
+      overflow-x: auto;
+    }
+    
+    .quick-start code {
+      color: #00ff88;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+    }
+    
+    .bots-list {
+      display: grid;
+      gap: 15px;
+      margin-bottom: 40px;
+    }
+    
+    .agent-status-section {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 25px;
+      border: 1px solid #0f3460;
+    }
+    
+    .agent-list-compact {
+      display: grid;
+      gap: 10px;
+    }
+    
+    .agent-item-compact {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 15px;
+      border: 1px solid #0f3460;
+    }
+    
+    .agent-item-compact:hover {
+      border-color: #00d9ff;
+    }
+    
+    .agent-info-compact {
+      flex: 1;
+    }
+    
+    .agent-name-compact {
+      font-weight: 600;
+      color: #eee;
+      margin-bottom: 4px;
+    }
+    
+    .agent-meta-compact {
+      font-size: 12px;
+      color: #888;
+    }
+    
     @media (max-width: 768px) {
       .agent-header { grid-template-columns: 1fr; gap: 10px; }
       .details-grid { grid-template-columns: 1fr; }
+      .login-content { padding: 30px 20px; }
+      .key-content { width: 95%; }
     }
   </style>
 </head>
@@ -438,19 +1062,219 @@
   <!-- Toast 消息容器 -->
   <div id="toast-container"></div>
   
+  <!-- 登录模态框 -->
+  <div id="loginModal" class="login-modal">
+    <div class="login-content">
+      <div class="login-header">
+        <h2>🦞 龙虾营地</h2>
+        <p class="login-subtitle">登录或注册以获取您的专属 Key</p>
+      </div>
+      
+      <div class="login-tabs">
+        <button class="login-tab active" onclick="switchTab('login')">登录</button>
+        <button class="login-tab" onclick="switchTab('register')">注册</button>
+      </div>
+      
+      <form id="loginForm" class="login-form">
+        <input type="text" id="username" placeholder="用户名" required>
+        <input type="password" id="password" placeholder="密码" required>
+        <input type="email" id="email" placeholder="邮箱（注册时必填）" style="display:none">
+        <button type="submit" class="login-btn">登录</button>
+      </form>
+      
+      <div id="loginError" class="login-error"></div>
+    </div>
+  </div>
+  
+  <!-- Key 显示模态框 -->
+  <div id="keyModal" class="key-modal">
+    <div class="key-content" style="max-width: 800px;">
+      <div class="key-header">
+        <h3>🔑 账号管理</h3>
+        <button class="modal-close" onclick="closeKeyModal()">×</button>
+      </div>
+      <div class="key-body">
+        <!-- 用户信息 -->
+        <div class="key-section">
+          <h4>👤 用户信息</h4>
+          <div class="key-info">
+            <label>User ID：</label>
+            <div class="key-display">
+              <input type="text" id="userIdDisplay" readonly>
+              <button class="copy-btn" onclick="copyUserId()">📋 复制</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Bot 管理 -->
+        <div class="key-section" style="margin-top: 30px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4>🤖 Bot 管理</h4>
+            <button class="control-btn start" onclick="showCreateBotModal()">➕ 创建 Bot</button>
+          </div>
+          <div id="botList" class="bot-list">加载中...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 创建 Bot 模态框 -->
+  <div id="createBotModal" class="login-modal">
+    <div class="login-content">
+      <div class="login-header">
+        <h2>🤖 创建 Bot</h2>
+        <p class="login-subtitle">创建一个新的机器人</p>
+      </div>
+      
+      <form id="createBotForm" class="login-form">
+        <input type="text" id="botName" placeholder="Bot 名称" required>
+        <textarea id="botDescription" placeholder="备注（可选）" rows="3" style="resize: vertical;"></textarea>
+        <button type="submit" class="login-btn">创建</button>
+      </form>
+      
+      <div id="createBotError" class="login-error"></div>
+    </div>
+  </div>
+  
+  <!-- Bot 详情模态框 -->
+  <div id="botDetailModal" class="key-modal">
+    <div class="key-content">
+      <div class="key-header">
+        <h3 id="botDetailTitle">🤖 Bot 详情</h3>
+        <button class="modal-close" onclick="closeBotDetailModal()">×</button>
+      </div>
+      <div class="key-body">
+        <div class="key-info">
+          <label>Bot ID：</label>
+          <div class="key-display">
+            <input type="text" id="botIdDisplay" readonly>
+            <button class="copy-btn" onclick="copyBotId()">📋 复制</button>
+          </div>
+        </div>
+        <div class="key-info" style="margin-top: 20px;">
+          <label>Bot Token（用于 Agent 配置）：</label>
+          <div class="key-display">
+            <input type="text" id="botTokenDisplay" readonly>
+            <button class="copy-btn" onclick="copyBotToken()">📋 复制</button>
+          </div>
+        </div>
+        <div class="key-usage">
+          <h4>使用方法：</h4>
+          <pre><code>{
+  "plugins": {
+    "entries": {
+      "claw-camp-agent": {
+        "enabled": true,
+        "hubUrl": "wss://camp.aigc.sx.cn/ws",
+        "token": "<span id="botTokenPlaceholder">YOUR_BOT_TOKEN</span>",
+        "agentId": "<span id="botIdPlaceholder">YOUR_BOT_ID</span>"
+      }
+    }
+  }
+}</code></pre>
+        </div>
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+          <button class="control-btn refresh" onclick="regenerateBotToken()">🔄 重新生成 Token</button>
+          <button class="control-btn stop" onclick="deleteBot()">🗑️ 删除 Bot</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <div class="header">
     <h1>
       🦞 龙虾营地
       <span id="version" class="version-badge"></span>
     </h1>
-    <div class="last-update">
-      <span class="ws-status disconnected" id="wsStatus">断开</span>
-      <span>更新: <span id="lastUpdate">--:--:--</span></span>
+    <div class="header-actions">
+      <div id="userInfo" class="user-info" style="display:none">
+        <span id="userName"></span>
+        <button class="key-btn" onclick="showKeyModal()">🔑 Key</button>
+        <button class="logout-btn" onclick="logout()">退出</button>
+      </div>
+      <button id="loginBtn" class="login-header-btn" onclick="showLoginModal()">登录</button>
+      <div class="last-update">
+        <span class="ws-status disconnected" id="wsStatus">断开</span>
+        <span>更新: <span id="lastUpdate">--:--:--</span></span>
+      </div>
     </div>
   </div>
   
   <div class="container">
-    <div id="agentsList"></div>
+    <!-- 未登录：欢迎页面 -->
+    <div id="welcomePage" class="welcome-page">
+      <div class="welcome-content">
+        <h2>🦞 欢迎来到龙虾营地</h2>
+        <p class="welcome-desc">龙虾营地是一个 Agent 监控和管理平台</p>
+        
+        <div class="features">
+          <div class="feature-item">
+            <div class="feature-icon">🤖</div>
+            <h3>创建 Bot</h3>
+            <p>为您的每个 OpenClaw 实例创建专属 Bot</p>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">🔗</div>
+            <h3>连接管理</h3>
+            <p>通过 Bot Token 连接本地 OpenClaw</p>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">📊</div>
+            <h3>状态监控</h3>
+            <p>实时查看 Agent 状态和 Token 消耗</p>
+          </div>
+        </div>
+        
+        <div class="cta-section">
+          <button class="login-btn-large" onclick="showLoginModal()">🚀 开始使用</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 已登录：Bot 管理页面 -->
+    <div id="botManagementPage" style="display:none;">
+      <div class="bot-management">
+        <div class="section-header">
+          <h2>🤖 我的 Bot</h2>
+          <button class="control-btn start" onclick="showCreateBotModal()">➕ 创建 Bot</button>
+        </div>
+        
+        <div class="quick-start">
+          <h3>📖 快速开始</h3>
+          <ol>
+            <li>点击右上角"创建 Bot"按钮创建一个新 Bot</li>
+            <li>复制 Bot Token 和 Bot ID</li>
+            <li>配置本地 OpenClaw：
+<pre><code>{
+  "plugins": {
+    "entries": {
+      "claw-camp-agent": {
+        "enabled": true,
+        "hubUrl": "wss://camp.aigc.sx.cn/ws",
+        "token": "YOUR_BOT_TOKEN",
+        "agentId": "YOUR_BOT_ID"
+      }
+    }
+  }
+}</code></pre>
+            </li>
+            <li>启动本地 Agent：<code>bash ~/.openclaw/workspace/scripts/start-claw-camp-agent.sh</code></li>
+            <li>刷新页面查看 Agent 状态</li>
+          </ol>
+        </div>
+        
+        <div id="botsList" class="bots-list">加载中...</div>
+        
+        <!-- Agent 状态（折叠） -->
+        <div class="agent-status-section">
+          <div class="section-header">
+            <h3>📊 在线 Agent</h3>
+            <button class="control-btn refresh" onclick="refreshAgentList()">🔄 刷新</button>
+          </div>
+          <div id="agentList" class="agent-list-compact"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -513,148 +1337,44 @@
     
     // 更新 Agent 列表
     function updateAgentsList() {
-      const container = document.getElementById('agentsList');
+      const container = document.getElementById('agentList');
+      if (!container) return;
       
       if (agents.length === 0) {
-        container.innerHTML = '<div class="empty">暂无 Agent 数据</div>';
+        container.innerHTML = '<div class="empty-state">暂无在线 Agent</div>';
         return;
       }
       
-      // 如果容器为空，首次渲染
-      if (!container.innerHTML || container.innerHTML.includes('empty')) {
-        renderAgentList();
-        return;
-      }
-      
-      // 如果需要完全刷新（用户主动刷新）
-      if (needsFullRefresh) {
-        needsFullRefresh = false;  // 重置标志
-        renderAgentList();
-        return;
-      }
-      
-      // 否则只更新数据，不重新渲染整个列表
-      agents.forEach(agent => {
-        const card = document.querySelector(`[data-agent-id="${agent.id}"]`);
-        if (!card) return;
-        
-        // 更新统计数字
-        const statBoxes = card.querySelectorAll('.stat-value');
-        if (statBoxes.length >= 4) {
-          statBoxes[0].textContent = agent.sessions?.count || 0;
-          statBoxes[1].textContent = formatTokens(agent.stats?.todayTokens);
-          statBoxes[2].textContent = (agent.stats?.cpu?.toFixed(0) || '--') + '%';
-          statBoxes[3].textContent = (agent.stats?.memory || '--') + '%';
-        }
-        
-        // 更新状态徽章
-        const statusBadge = card.querySelector('.status-badge');
-        const statusDot = card.querySelector('.status-dot');
-        if (statusBadge && statusDot) {
-          statusBadge.className = `status-badge ${agent.status}`;
-          statusDot.className = `status-dot ${agent.status}`;
-          statusBadge.lastChild.textContent = agent.status === 'online' ? '在线' : '离线';
-        }
-        
-        // 如果这个 Agent 是展开的，更新 Gateway 状态
-        if (expandedAgent === agent.id) {
-          const gatewayStatus = agent.gateway?.status || 'unknown';
-          const gatewayRunning = gatewayStatus === 'running';
-          
-          // 更新 Gateway 状态徽章
-          const gatewayBadge = card.querySelector('.detail-section .status-badge');
-          if (gatewayBadge) {
-            gatewayBadge.className = `status-badge ${gatewayRunning ? 'online' : 'offline'}`;
-            const gatewayDot = gatewayBadge.querySelector('.status-dot');
-            if (gatewayDot) {
-              gatewayDot.className = `status-dot ${gatewayRunning ? 'online' : 'offline'}`;
-            }
-            gatewayBadge.lastChild.textContent = gatewayRunning ? '运行中' : '已停止';
-          }
-        }
-      });
-    }
-    
-    // 渲染完整的 Agent 列表（只在首次或展开/收起时调用）
-    function renderAgentList() {
-      const container = document.getElementById('agentsList');
-      
-      container.innerHTML = agents.map(agent => {
-        const isExpanded = expandedAgent === agent.id;
-        return `
-          <div class="agent-card ${isExpanded ? 'expanded' : ''}" data-agent-id="${agent.id}">
-            <div class="agent-header" onclick="toggleAgent('${agent.id}')">
-              <div class="agent-info">
-                <div class="agent-name">
-                  🦞 ${agent.name || agent.id}
-                  ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span class="update-btn available" onclick="event.stopPropagation(); doAgentUpdate('${agent.id}')">🔄 更新</span>` : ''}
-                </div>
-                <div class="agent-meta">
-                  ${agent.host || '--'} 
-                  ${agent.agentVersion ? `· Agent v${agent.agentVersion}` : ''}
-                  ${agentUpdateInfo[agent.id]?.hasUpdate ? `<span style="color:#ff9f43"> (有更新)</span>` : ''}
-                </div>
-              </div>
-              
-              <div class="stat-box">
-                <div class="stat-value">${agent.sessions?.count || 0}</div>
-                <div class="stat-label">会话</div>
-              </div>
-              
-              <div class="stat-box">
-                <div class="stat-value">${formatTokens(agent.stats?.todayTokens)}</div>
-                <div class="stat-label">今日Token</div>
-                <div class="stat-sub">${formatTokens(agent.stats?.todayNetTokens)} 净消耗</div>
-              </div>
-              
-              <div class="stat-box">
-                <div class="stat-value">${agent.stats?.cpu?.toFixed(0) || '--'}%</div>
-                <div class="stat-label">CPU</div>
-              </div>
-              
-              <div class="stat-box">
-                <div class="stat-value">${agent.stats?.memory || '--'}%</div>
-                <div class="stat-label">内存</div>
-              </div>
-              
-              <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
-                <span class="status-badge ${agent.status}">
-                  <span class="status-dot ${agent.status}"></span>
-                  ${agent.status === 'online' ? '在线' : '离线'}
-                </span>
-                <span class="expand-icon">▼</span>
-              </div>
+      // 渲染紧凑的 Agent 列表
+      container.innerHTML = agents.map(agent => `
+        <div class="agent-item-compact">
+          <div class="agent-info-compact">
+            <div class="agent-name-compact">
+              <span class="status-dot ${agent.status}"></span>
+              ${agent.name || agent.id}
             </div>
-            
-            ${isExpanded ? generateAgentDetails(agent) : ''}
+            <div class="agent-meta-compact">
+              ${agent.host || '--'} · 
+              ${agent.sessions?.count || 0} 会话 · 
+              ${formatTokens(agent.stats?.todayTokens)} 今日 Token · 
+              CPU ${agent.stats?.cpu?.toFixed(0) || '--'}% · 
+              内存 ${agent.stats?.memory || '--'}%
+            </div>
           </div>
-        `;
-      }).join('');
-      
-      // 如果有展开的 Agent，初始化图表
-      if (expandedAgent) {
-        setTimeout(() => {
-          initAgentChart(expandedAgent);
-          fetchHistory(expandedAgent);
-          
-          // 启动定时更新历史数据（每 60 秒）
-          if (historyUpdateTimer) clearInterval(historyUpdateTimer);
-          historyUpdateTimer = setInterval(() => {
-            if (expandedAgent) {
-              fetchHistory(expandedAgent);
-            }
-          }, 60000);
-        }, 50);
-      } else {
-        // 收起时停止定时器
-        if (historyUpdateTimer) {
-          clearInterval(historyUpdateTimer);
-          historyUpdateTimer = null;
-        }
-      }
+          <span class="status-badge ${agent.status}">
+            ${agent.status === 'online' ? '在线' : '离线'}
+          </span>
+        </div>
+      `).join('');
     }
     
-    // 生成 Agent 详情
+    // 刷新 Agent 列表
+    function refreshAgentList() {
+      ws.send(JSON.stringify({ type: 'subscribe' }));
+      showToast('✅ Agent 列表已刷新', 'success');
+    }
+    
+    // 生成 Agent 详情（保留用于将来可能的扩展）
     function generateAgentDetails(agent) {
       const gatewayStatus = agent.gateway?.status || 'unknown';
       const gatewayRunning = gatewayStatus === 'running';
@@ -1096,7 +1816,626 @@
       return div.innerHTML;
     }
     
+    // ──────────────────────────────────────────────
+    // 用户认证功能
+    // ──────────────────────────────────────────────
+    
+    let currentUser = null;
+    let isRegisterMode = false;
+    
+    // 初始化：检查本地存储的用户信息
+    function initAuth() {
+      const savedUser = localStorage.getItem('campUser');
+      if (savedUser) {
+        try {
+          currentUser = JSON.parse(savedUser);
+          
+          // 检查是否有必要的字段（userId）
+          if (!currentUser.userId) {
+            // 旧数据格式，清除并提示重新登录
+            console.log('[Auth] 检测到旧数据格式，清除并提示重新登录');
+            currentUser = null;
+            localStorage.removeItem('campUser');
+            showToast('⚠️ 账号信息已更新，请重新登录', 'info');
+          } else {
+            updateAuthUI();
+          }
+        } catch (e) {
+          console.error('[Auth] 解析用户数据失败:', e);
+          currentUser = null;
+          localStorage.removeItem('campUser');
+        }
+      }
+    }
+    
+    // 更新 UI
+    function updateAuthUI() {
+      const userInfo = document.getElementById('userInfo');
+      const loginBtn = document.getElementById('loginBtn');
+      const userName = document.getElementById('userName');
+      const welcomePage = document.getElementById('welcomePage');
+      const botManagementPage = document.getElementById('botManagementPage');
+      
+      if (currentUser) {
+        userInfo.style.display = 'flex';
+        loginBtn.style.display = 'none';
+        userName.textContent = currentUser.username;
+        
+        // 显示 Bot 管理页面
+        welcomePage.style.display = 'none';
+        botManagementPage.style.display = 'block';
+        
+        // 加载 Bot 列表
+        loadBots();
+      } else {
+        userInfo.style.display = 'none';
+        loginBtn.style.display = 'block';
+        
+        // 显示欢迎页面
+        welcomePage.style.display = 'block';
+        botManagementPage.style.display = 'none';
+      }
+    }
+    
+    // 显示登录模态框
+    function showLoginModal() {
+      document.getElementById('loginModal').classList.add('show');
+      document.getElementById('loginError').classList.remove('show');
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+      document.getElementById('email').value = '';
+    }
+    
+    // 切换登录/注册模式
+    function switchTab(mode) {
+      isRegisterMode = (mode === 'register');
+      const tabs = document.querySelectorAll('.login-tab');
+      const emailInput = document.getElementById('email');
+      const submitBtn = document.querySelector('.login-btn');
+      
+      tabs.forEach((tab, idx) => {
+        tab.classList.toggle('active', (idx === 0) !== isRegisterMode);
+      });
+      
+      emailInput.style.display = isRegisterMode ? 'block' : 'none';
+      if (isRegisterMode) {
+        emailInput.required = true;
+        submitBtn.textContent = '注册';
+      } else {
+        emailInput.required = false;
+        submitBtn.textContent = '登录';
+      }
+    }
+    
+    // 处理登录/注册表单提交
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const email = document.getElementById('email').value.trim();
+      const errorDiv = document.getElementById('loginError');
+      
+      if (!username || !password) {
+        errorDiv.textContent = '用户名和密码不能为空';
+        errorDiv.classList.add('show');
+        return;
+      }
+      
+      const endpoint = isRegisterMode ? '/api/register' : '/api/login';
+      const body = isRegisterMode 
+        ? { username, password, email }
+        : { username, password };
+      
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || '请求失败');
+        }
+        
+        // 保存用户信息
+        if (isRegisterMode) {
+          currentUser = { 
+            username, 
+            userId: data.userId,
+            campKey: data.campKey 
+          };
+        } else {
+          currentUser = data.user;
+        }
+        
+        localStorage.setItem('campUser', JSON.stringify(currentUser));
+        
+        // 关闭模态框
+        document.getElementById('loginModal').classList.remove('show');
+        
+        // 更新 UI
+        updateAuthUI();
+        
+        showToast(isRegisterMode ? '✅ 注册成功！' : '✅ 登录成功！', 'success');
+        
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.classList.add('show');
+      }
+    });
+    
+    // ──────────────────────────────────────────────
+    // Bot 管理（主页面）
+    // ──────────────────────────────────────────────
+    
+    // 加载 Bot 列表（主页面）
+    async function loadBots() {
+      const botsList = document.getElementById('botsList');
+      if (!botsList) return;
+      
+      botsList.innerHTML = '<div class="empty-state">加载中...</div>';
+      
+      try {
+        const res = await fetch(`/api/bot/list?userId=${currentUser.userId}`);
+        const data = await res.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '加载失败');
+        }
+        
+        if (data.bots.length === 0) {
+          botsList.innerHTML = `
+            <div class="empty-state">
+              <p>还没有创建 Bot</p>
+              <p style="margin-top: 10px; font-size: 13px;">点击右上角"创建 Bot"按钮开始</p>
+            </div>
+          `;
+          return;
+        }
+        
+        botsList.innerHTML = data.bots.map(bot => `
+          <div class="bot-item" onclick="showBotDetail('${bot.bot_id}')">
+            <div class="bot-info">
+              <div class="bot-name">${bot.avatar || '🦞'} ${bot.name}</div>
+              <div class="bot-meta">${bot.description || '无备注'} · 创建于 ${new Date(bot.created_at).toLocaleDateString('zh-CN')}</div>
+            </div>
+            <div class="bot-actions">
+              <button class="control-btn refresh" onclick="event.stopPropagation(); showBotDetail('${bot.bot_id}')">📋 查看详情</button>
+            </div>
+          </div>
+        `).join('');
+        
+      } catch (err) {
+        botsList.innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
+      }
+    }
+    
+    // 显示创建 Bot 模态框（主页面按钮）
+    function showCreateBotModal() {
+      if (!currentUser) {
+        showToast('⚠️ 请先登录', 'error');
+        return;
+      }
+      document.getElementById('createBotModal').classList.add('show');
+      document.getElementById('botName').value = '';
+      document.getElementById('botDescription').value = '';
+      document.getElementById('createBotError').classList.remove('show');
+    }
+    
+    // 显示 Key 模态框
+    function showKeyModal() {
+      if (!currentUser) return;
+      
+      document.getElementById('userIdDisplay').value = currentUser.userId || '';
+      document.getElementById('keyModal').classList.add('show');
+      
+      // 加载 Bot 列表
+      loadBotList();
+    }
+    
+    // 加载 Bot 列表（Key 模态框）
+    async function loadBotList() {
+      const botList = document.getElementById('botList');
+      botList.innerHTML = '<div class="empty-state">加载中...</div>';
+      
+      try {
+        const res = await fetch(`/api/bot/list?userId=${currentUser.userId}`);
+        const data = await res.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '加载失败');
+        }
+        
+        if (data.bots.length === 0) {
+          botList.innerHTML = '<div class="empty-state">还没有创建 Bot，点击右上角"创建 Bot"按钮开始</div>';
+          return;
+        }
+        
+        botList.innerHTML = data.bots.map(bot => `
+          <div class="bot-item" id="bot-item-${bot.bot_id}">
+            <div class="bot-item-header">
+              <div class="bot-info">
+                <div class="bot-name">${bot.avatar || '🦞'} ${bot.name}</div>
+                <div class="bot-meta">${bot.description || '无备注'} · 创建于 ${new Date(bot.created_at).toLocaleDateString('zh-CN')}</div>
+              </div>
+              <div class="bot-actions">
+                <span class="bot-status-badge disconnected" id="badge-${bot.bot_id}">● 未连接</span>
+                <button class="control-btn connect-btn" id="connect-btn-${bot.bot_id}" onclick="connectBot('${bot.bot_id}')">🔌 连接</button>
+                <button class="control-btn refresh" onclick="showBotDetail('${bot.bot_id}')">📋 管理</button>
+              </div>
+            </div>
+            <div class="bot-connect-detail" id="detail-${bot.bot_id}" style="display:none;"></div>
+          </div>
+        `).join('');
+        
+      } catch (err) {
+        botList.innerHTML = `<div class="empty-state">加载失败: ${err.message}</div>`;
+      }
+    }
+    
+    // 显示创建 Bot 模态框
+    function showCreateBotModal() {
+      document.getElementById('createBotModal').classList.add('show');
+      document.getElementById('botName').value = '';
+      document.getElementById('botDescription').value = '';
+      document.getElementById('createBotError').classList.remove('show');
+    }
+    
+    // 创建 Bot 表单提交
+    document.getElementById('createBotForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const name = document.getElementById('botName').value.trim();
+      const description = document.getElementById('botDescription').value.trim();
+      const errorDiv = document.getElementById('createBotError');
+      
+      if (!name) {
+        errorDiv.textContent = 'Bot 名称不能为空';
+        errorDiv.classList.add('show');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/bot/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.userId,
+            name,
+            description
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || '创建失败');
+        }
+        
+        // 关闭模态框
+        document.getElementById('createBotModal').classList.remove('show');
+        
+        // 刷新 Bot 列表（主页面和模态框）
+        loadBots();
+        loadBotList();
+        
+        showToast('✅ Bot 创建成功！', 'success');
+        
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.classList.add('show');
+      }
+    });
+    
+    // 当前选中的 Bot
+    let currentBot = null;
+    
+    // 显示 Bot 详情
+    // 连接验证：检查该 bot 是否有 agent 在线
+    async function connectBot(botId) {
+      const btn = document.getElementById(`connect-btn-${botId}`);
+      const badge = document.getElementById(`badge-${botId}`);
+      const detail = document.getElementById(`detail-${botId}`);
+
+      btn.disabled = true;
+      btn.textContent = '⏳ 验证中...';
+      badge.className = 'bot-status-badge checking';
+      badge.textContent = '● 验证中';
+
+      try {
+        const res = await fetch(`/api/bot/status?botId=${botId}`, {
+          headers: { 'x-camp-key': currentUser.campKey }
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || '验证失败');
+
+        if (data.connected && data.agent) {
+          const agent = data.agent;
+          badge.className = 'bot-status-badge connected';
+          badge.textContent = '● 已连接';
+          btn.textContent = '🔄 刷新';
+          btn.disabled = false;
+
+          // 计算 token 统计
+          let totalTokens = 0;
+          if (agent.sessions) {
+            agent.sessions.forEach(s => totalTokens += (s.tokens || 0));
+          }
+
+          detail.style.display = 'block';
+          detail.innerHTML = `
+            <div class="agent-connect-info">
+              <div class="agent-connect-row">
+                <span class="agent-connect-label">Agent 名称</span>
+                <span class="agent-connect-value">${agent.name}</span>
+              </div>
+              <div class="agent-connect-row">
+                <span class="agent-connect-label">运行版本</span>
+                <span class="agent-connect-value">v${agent.agentVersion || 'N/A'}</span>
+              </div>
+              <div class="agent-connect-row">
+                <span class="agent-connect-label">主机地址</span>
+                <span class="agent-connect-value">${agent.host || 'N/A'}</span>
+              </div>
+              <div class="agent-connect-row">
+                <span class="agent-connect-label">活跃会话</span>
+                <span class="agent-connect-value">${agent.sessions?.length || 0} 个</span>
+              </div>
+              <div class="agent-connect-row">
+                <span class="agent-connect-label">今日 Token</span>
+                <span class="agent-connect-value">${totalTokens > 0 ? (totalTokens / 1000).toFixed(1) + 'K' : '0'}</span>
+              </div>
+              <div class="agent-connect-row">
+                <span class="agent-connect-label">最后心跳</span>
+                <span class="agent-connect-value">${new Date(agent.lastSeen).toLocaleTimeString('zh-CN')}</span>
+              </div>
+            </div>
+          `;
+        } else {
+          badge.className = 'bot-status-badge disconnected';
+          badge.textContent = '● 未连接';
+          btn.textContent = '🔌 连接';
+          btn.disabled = false;
+          detail.style.display = 'block';
+          detail.innerHTML = `
+            <div class="agent-connect-info not-connected">
+              <p>⚠️ 未检测到使用此 Bot 的 Agent</p>
+              <p>请确认你的 OpenClaw 配置中 <code>claw-camp</code> channel 使用了正确的 botId 和 botToken。</p>
+              <pre class="connect-hint">"channels": {
+  "claw-camp": {
+    "accounts": {
+      "default": {
+        "botId": "${botId}",
+        "botToken": "your-bot-token"
+      }
+    }
+  }
+}</pre>
+            </div>
+          `;
+        }
+      } catch (e) {
+        badge.className = 'bot-status-badge disconnected';
+        badge.textContent = '● 错误';
+        btn.textContent = '🔌 连接';
+        btn.disabled = false;
+        detail.style.display = 'block';
+        detail.innerHTML = `<div class="agent-connect-info not-connected">❌ ${e.message}</div>`;
+      }
+    }
+
+    async function showBotDetail(botId) {
+      try {
+        const res = await fetch(`/api/bot/detail?botId=${botId}&userId=${currentUser.userId}`);
+        const data = await res.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '加载失败');
+        }
+        
+        currentBot = data.bot;
+        
+        document.getElementById('botDetailTitle').textContent = `🤖 ${currentBot.name}`;
+        document.getElementById('botIdDisplay').value = currentBot.bot_id;
+        document.getElementById('botTokenDisplay').value = currentBot.token;
+        document.getElementById('botTokenPlaceholder').textContent = currentBot.token;
+        document.getElementById('botIdPlaceholder').textContent = currentBot.bot_id;
+        document.getElementById('botDetailModal').classList.add('show');
+        
+      } catch (err) {
+        showToast('❌ 加载 Bot 详情失败: ' + err.message, 'error');
+      }
+    }
+    
+    // 关闭 Bot 详情模态框
+    function closeBotDetailModal() {
+      document.getElementById('botDetailModal').classList.remove('show');
+      currentBot = null;
+    }
+    
+    // 复制 Bot ID
+    async function copyBotId() {
+      const botId = document.getElementById('botIdDisplay').value;
+      if (!botId) return;
+      
+      try {
+        await navigator.clipboard.writeText(botId);
+        showToast('✅ Bot ID 已复制', 'success');
+      } catch (err) {
+        const input = document.getElementById('botIdDisplay');
+        input.select();
+        document.execCommand('copy');
+        showToast('✅ Bot ID 已复制', 'success');
+      }
+    }
+    
+    // 复制 Bot Token
+    async function copyBotToken() {
+      const token = document.getElementById('botTokenDisplay').value;
+      if (!token) return;
+      
+      try {
+        await navigator.clipboard.writeText(token);
+        showToast('✅ Bot Token 已复制', 'success');
+      } catch (err) {
+        const input = document.getElementById('botTokenDisplay');
+        input.select();
+        document.execCommand('copy');
+        showToast('✅ Bot Token 已复制', 'success');
+      }
+    }
+    
+    // 重新生成 Bot Token
+    async function regenerateBotToken() {
+      if (!currentBot) return;
+      
+      if (!confirm('确定要重新生成 Token 吗？\n\n旧 Token 将立即失效，需要更新所有使用该 Token 的 Agent 配置。')) {
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/bot/regenerate-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            botId: currentBot.bot_id,
+            userId: currentUser.userId
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '重新生成失败');
+        }
+        
+        // 更新显示
+        currentBot.token = data.token;
+        document.getElementById('botTokenDisplay').value = data.token;
+        document.getElementById('botTokenPlaceholder').textContent = data.token;
+        
+        showToast('✅ Token 已重新生成', 'success');
+        
+      } catch (err) {
+        showToast('❌ 重新生成 Token 失败: ' + err.message, 'error');
+      }
+    }
+    
+    // 删除 Bot
+    async function deleteBot() {
+      if (!currentBot) return;
+      
+      if (!confirm(`确定要删除 Bot "${currentBot.name}" 吗？\n\n此操作不可撤销。`)) {
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/bot/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            botId: currentBot.bot_id,
+            userId: currentUser.userId
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || '删除失败');
+        }
+        
+        // 关闭详情模态框
+        closeBotDetailModal();
+        
+        // 刷新 Bot 列表（主页面和模态框）
+        loadBots();
+        loadBotList();
+        
+        showToast('✅ Bot 已删除', 'success');
+        
+      } catch (err) {
+        showToast('❌ 删除 Bot 失败: ' + err.message, 'error');
+      }
+    }
+    
+    // 关闭 Key 模态框
+    function closeKeyModal() {
+      document.getElementById('keyModal').classList.remove('show');
+    }
+    
+    // 复制 User ID
+    async function copyUserId() {
+      const userId = document.getElementById('userIdDisplay').value;
+      if (!userId) return;
+      
+      try {
+        await navigator.clipboard.writeText(userId);
+        showToast('✅ User ID 已复制到剪贴板', 'success');
+      } catch (err) {
+        const input = document.getElementById('userIdDisplay');
+        input.select();
+        document.execCommand('copy');
+        showToast('✅ User ID 已复制', 'success');
+      }
+    }
+    
+    // 复制 Key
+    async function copyKey() {
+      const key = document.getElementById('campKey').value;
+      if (!key) return;
+      
+      try {
+        await navigator.clipboard.writeText(key);
+        showToast('✅ Key 已复制到剪贴板', 'success');
+      } catch (err) {
+        // 降级方案：使用 execCommand
+        const input = document.getElementById('campKey');
+        input.select();
+        document.execCommand('copy');
+        showToast('✅ Key 已复制', 'success');
+      }
+    }
+    
+    // 退出登录
+    function logout() {
+      currentUser = null;
+      localStorage.removeItem('campUser');
+      updateAuthUI();
+      showToast('已退出登录', 'info');
+    }
+    
+    // 点击背景关闭模态框
+    document.getElementById('loginModal').addEventListener('click', (e) => {
+      if (e.target.id === 'loginModal') {
+        document.getElementById('loginModal').classList.remove('show');
+      }
+    });
+    
+    document.getElementById('keyModal').addEventListener('click', (e) => {
+      if (e.target.id === 'keyModal') {
+        closeKeyModal();
+      }
+    });
+    
+    document.getElementById('createBotModal').addEventListener('click', (e) => {
+      if (e.target.id === 'createBotModal') {
+        document.getElementById('createBotModal').classList.remove('show');
+      }
+    });
+    
+    document.getElementById('botDetailModal').addEventListener('click', (e) => {
+      if (e.target.id === 'botDetailModal') {
+        closeBotDetailModal();
+      }
+    });
+    
     // 初始化
+    initAuth();
     connect();
     fetchVersion();
     setTimeout(checkAllAgentUpdates, 2000);

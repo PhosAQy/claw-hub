@@ -38,6 +38,43 @@ async function initDB() {
   try {
     pool = mysql.createPool(DB_CONFIG);
 
+    // 创建用户表
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id VARCHAR(32) UNIQUE NOT NULL,
+        username VARCHAR(100) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        camp_key VARCHAR(64) UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        INDEX idx_user_id (user_id),
+        INDEX idx_username (username),
+        INDEX idx_camp_key (camp_key)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // 创建 bots 表
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bots (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        bot_id VARCHAR(32) UNIQUE NOT NULL,
+        user_id VARCHAR(32) NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        avatar VARCHAR(255) DEFAULT '🦞',
+        token VARCHAR(64) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE,
+        INDEX idx_bot_id (bot_id),
+        INDEX idx_user_id (user_id),
+        INDEX idx_token (token),
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
     /**
      * session_snapshots：每个 session 每次活动状态的快照
      * 
@@ -302,10 +339,40 @@ const server = http.createServer((req, res) => {
   const allowOrigin = allowedOrigins.includes(origin) ? origin : '';
 
   res.setHeader('Access-Control-Allow-Origin', allowOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
+
+  // 静态文件服务（Dashboard）
+  if (req.method === 'GET' && !req.url.startsWith('/api/')) {
+    let filePath = req.url === '/' ? '/index.html' : req.url;
+    filePath = path.join(__dirname, 'frontend', filePath);
+    
+    const ext = path.extname(filePath);
+    const mimeTypes = {
+      '.html': 'text/html; charset=utf-8',
+      '.css': 'text/css',
+      '.js': 'application/javascript',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.svg': 'image/svg+xml'
+    };
+    
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('Not Found');
+        return;
+      }
+      res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+      res.writeHead(200);
+      res.end(data);
+    });
+    return;
+  }
 
   // 版本信息
   if (req.url === '/api/version') {
@@ -557,6 +624,453 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ──────────────────────────────────────────────
+  // 用户认证 API
+  // ──────────────────────────────────────────────
+
+  // 用户注册
+  if (req.url === '/api/register' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { username, password, email } = JSON.parse(body);
+        
+        if (!username || !password) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户名和密码不能为空' }));
+          return;
+        }
+        
+        // 检查用户名是否已存在
+        const [existing] = await pool.query('SELECT id FROM users WHERE username = ?', [username]);
+        if (existing.length > 0) {
+          res.writeHead(409, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户名已存在' }));
+          return;
+        }
+        
+        // 生成密码哈希（简单版，生产环境应该用 bcrypt）
+        const crypto = require('crypto');
+        const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+        
+        // 生成 camp_key
+        const campKey = crypto.randomBytes(32).toString('hex');
+        
+        // 生成 user_id: uid_<16位数字小写字母>
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let randomStr = '';
+        for (let i = 0; i < 16; i++) {
+          randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const userId = `uid_${randomStr}`;
+        
+        // 插入用户
+        await pool.query(
+          'INSERT INTO users (user_id, username, password_hash, email, camp_key) VALUES (?, ?, ?, ?, ?)',
+          [userId, username, passwordHash, email || null, campKey]
+        );
+        
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          message: '注册成功',
+          userId,
+          campKey 
+        }));
+      } catch (e) {
+        console.error('[Auth] 注册失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '注册失败' }));
+      }
+    });
+    return;
+  }
+
+  // 用户登录
+  if (req.url === '/api/login' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { username, password } = JSON.parse(body);
+        
+        if (!username || !password) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户名和密码不能为空' }));
+          return;
+        }
+        
+        // 查询用户
+        const [users] = await pool.query(
+          'SELECT * FROM users WHERE username = ? AND is_active = TRUE',
+          [username]
+        );
+        
+        if (users.length === 0) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户名或密码错误' }));
+          return;
+        }
+        
+        const user = users[0];
+        
+        // 验证密码
+        const crypto = require('crypto');
+        const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+        
+        if (user.password_hash !== passwordHash) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户名或密码错误' }));
+          return;
+        }
+        
+        // 更新最后登录时间
+        await pool.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          message: '登录成功',
+          user: {
+            id: user.id,
+            userId: user.user_id,
+            username: user.username,
+            email: user.email,
+            campKey: user.camp_key
+          }
+        }));
+      } catch (e) {
+        console.error('[Auth] 登录失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '登录失败' }));
+      }
+    });
+    return;
+  }
+
+  // 重新生成 camp_key
+  if (req.url === '/api/regenerate-key' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { username, password } = JSON.parse(body);
+        
+        // 验证用户
+        const [users] = await pool.query(
+          'SELECT * FROM users WHERE username = ? AND is_active = TRUE',
+          [username]
+        );
+        
+        if (users.length === 0) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户名或密码错误' }));
+          return;
+        }
+        
+        const user = users[0];
+        const crypto = require('crypto');
+        const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+        
+        if (user.password_hash !== passwordHash) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户名或密码错误' }));
+          return;
+        }
+        
+        // 生成新的 camp_key
+        const newCampKey = crypto.randomBytes(32).toString('hex');
+        
+        // 更新数据库
+        await pool.query('UPDATE users SET camp_key = ? WHERE id = ?', [newCampKey, user.id]);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          message: 'Key 已重新生成',
+          campKey: newCampKey
+        }));
+      } catch (e) {
+        console.error('[Auth] 重新生成 key 失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '重新生成 key 失败' }));
+      }
+    });
+    return;
+  }
+
+  // ──────────────────────────────────────────────
+  // Bot 管理 API
+  // ──────────────────────────────────────────────
+
+  // 创建 Bot
+  if (req.url === '/api/bot/create' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { userId, name, description } = JSON.parse(body);
+        
+        if (!userId || !name) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户ID和Bot名称不能为空' }));
+          return;
+        }
+        
+        // 验证用户是否存在
+        const [users] = await pool.query('SELECT * FROM users WHERE user_id = ? AND is_active = TRUE', [userId]);
+        if (users.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '用户不存在' }));
+          return;
+        }
+        
+        const crypto = require('crypto');
+        
+        // 生成 bot_id: bot_<16位>
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let randomStr = '';
+        for (let i = 0; i < 16; i++) {
+          randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const botId = `bot_${randomStr}`;
+        
+        // 生成 bot token
+        const botToken = crypto.randomBytes(32).toString('hex');
+        
+        // 插入 bot
+        await pool.query(
+          'INSERT INTO bots (bot_id, user_id, name, description, token) VALUES (?, ?, ?, ?, ?)',
+          [botId, userId, name, description || null, botToken]
+        );
+        
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          message: 'Bot 创建成功',
+          bot: {
+            botId,
+            name,
+            description,
+            token: botToken
+          }
+        }));
+      } catch (e) {
+        console.error('[Bot] 创建失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '创建 Bot 失败' }));
+      }
+    });
+    return;
+  }
+
+  // 列出用户的 Bots
+  if (req.url.startsWith('/api/bot/list') && req.method === 'GET') {
+    (async () => {
+      const urlParams = new URL(req.url, `http://${req.headers.host}`);
+      const userId = urlParams.searchParams.get('userId');
+      
+      if (!userId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '用户ID不能为空' }));
+        return;
+      }
+      
+      try {
+        const [bots] = await pool.query(
+          'SELECT bot_id, name, description, avatar, created_at, is_active FROM bots WHERE user_id = ? AND is_active = TRUE ORDER BY created_at DESC',
+          [userId]
+        );
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          bots 
+        }));
+      } catch (e) {
+        console.error('[Bot] 查询失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '查询 Bot 失败' }));
+      }
+    })();
+    return;
+  }
+
+  // 获取 Bot 详情（包含 token）
+  if (req.url.startsWith('/api/bot/detail') && req.method === 'GET') {
+    (async () => {
+      const urlParams = new URL(req.url, `http://${req.headers.host}`);
+      const botId = urlParams.searchParams.get('botId');
+      const userId = urlParams.searchParams.get('userId');
+      
+      if (!botId || !userId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Bot ID 和用户ID不能为空' }));
+        return;
+      }
+      
+      try {
+        const [bots] = await pool.query(
+          'SELECT * FROM bots WHERE bot_id = ? AND user_id = ? AND is_active = TRUE',
+          [botId, userId]
+        );
+        
+        if (bots.length === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Bot 不存在' }));
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          bot: bots[0]
+        }));
+      } catch (e) {
+        console.error('[Bot] 查询详情失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '查询 Bot 详情失败' }));
+      }
+    })();
+    return;
+  }
+
+  // 删除 Bot（软删除）
+  if (req.url === '/api/bot/delete' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { botId, userId } = JSON.parse(body);
+        
+        if (!botId || !userId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Bot ID 和用户ID不能为空' }));
+          return;
+        }
+        
+        // 软删除
+        const [result] = await pool.query(
+          'UPDATE bots SET is_active = FALSE WHERE bot_id = ? AND user_id = ?',
+          [botId, userId]
+        );
+        
+        if (result.affectedRows === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Bot 不存在' }));
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          message: 'Bot 已删除'
+        }));
+      } catch (e) {
+        console.error('[Bot] 删除失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '删除 Bot 失败' }));
+      }
+    });
+    return;
+  }
+
+  // 重新生成 Bot Token
+  if (req.url === '/api/bot/regenerate-token' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { botId, userId } = JSON.parse(body);
+        
+        if (!botId || !userId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Bot ID 和用户ID不能为空' }));
+          return;
+        }
+        
+        const crypto = require('crypto');
+        const newToken = crypto.randomBytes(32).toString('hex');
+        
+        const [result] = await pool.query(
+          'UPDATE bots SET token = ? WHERE bot_id = ? AND user_id = ? AND is_active = TRUE',
+          [newToken, botId, userId]
+        );
+        
+        if (result.affectedRows === 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Bot 不存在' }));
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          message: 'Token 已重新生成',
+          token: newToken
+        }));
+      } catch (e) {
+        console.error('[Bot] 重新生成 token 失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '重新生成 Token 失败' }));
+      }
+    });
+    return;
+  }
+
+  // GET /api/bot/status?botId=xxx — 检查 bot 是否有 agent 在线
+  if (req.url.startsWith('/api/bot/status') && req.method === 'GET') {
+    const url = new URL(req.url, 'http://localhost');
+    const botId = url.searchParams.get('botId');
+    const campKey = req.headers['x-camp-key'];
+
+    if (!botId || !campKey) {
+      res.writeHead(400); res.end(JSON.stringify({ error: 'missing botId or auth' })); return;
+    }
+
+    // 验证用户身份
+    const [users] = await pool.execute('SELECT id FROM users WHERE camp_key = ? AND is_active = 1', [campKey]);
+    if (!users.length) {
+      res.writeHead(401); res.end(JSON.stringify({ error: 'unauthorized' })); return;
+    }
+    const userId = users[0].id;
+
+    // 验证该 bot 属于该用户
+    const [bots] = await pool.execute(
+      'SELECT bot_id, name FROM bots WHERE bot_id = ? AND user_id = ? AND is_active = 1',
+      [botId, userId]
+    );
+    if (!bots.length) {
+      res.writeHead(403); res.end(JSON.stringify({ error: 'bot not found' })); return;
+    }
+
+    // 查找是否有该 bot 的 agent 在线
+    let connectedAgent = null;
+    for (const [, agent] of agents) {
+      if (agent.botId === botId && agent.status === 'online') {
+        connectedAgent = {
+          id: agent.id,
+          name: agent.name,
+          host: agent.host,
+          agentVersion: agent.agentVersion,
+          status: agent.status,
+          lastSeen: agent.lastSeen,
+          sessions: agent.sessions || [],
+          stats: agent.stats
+        };
+        break;
+      }
+    }
+
+    res.writeHead(200, corsHeaders);
+    res.end(JSON.stringify({
+      connected: !!connectedAgent,
+      agent: connectedAgent
+    }));
+    return;
+  }
+
   res.writeHead(404); res.end('Not Found');
 });
 
@@ -564,6 +1078,11 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
   let isAgent = false, agentId = null;
+
+  // 解析连接时携带的 token 和 agentId
+  const connUrl = new URL(req.url, 'http://localhost');
+  const connToken = connUrl.searchParams.get('token');
+  const connAgentId = connUrl.searchParams.get('agentId');
 
   ws.on('message', (data) => {
     try {
@@ -574,7 +1093,7 @@ wss.on('connection', (ws, req) => {
         return;
       }
       isAgent = true;
-      handleMessage(ws, msg, id => { agentId = id; });
+      handleMessage(ws, msg, id => { agentId = id; }, connToken, connAgentId);
     } catch (e) { console.error('[Hub] 解析失败:', e.message); }
   });
 
@@ -593,27 +1112,51 @@ wss.on('connection', (ws, req) => {
   ws.on('error', err => console.error('[Hub] WS 错误:', err.message));
 });
 
-function handleMessage(ws, msg, setAgentId) {
+function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
   const { type, payload } = msg;
   switch (type) {
     case 'register': {
-      const agent = {
-        id: payload.id,
-        name: payload.name || payload.id,
-        host: payload.host,
-        agentVersion: payload.agentVersion,  // Agent 版本
-        status: 'online',
-        lastSeen: Date.now(),
-        gateway: null,
-        sessions: [],
-        stats: null,
-        ws  // 保存 WebSocket 连接
-      };
-      agents.set(payload.id, agent);
-      setAgentId(payload.id);
-      console.log(`[Hub] Agent 注册: ${agent.name} @ ${agent.host} (v${payload.agentVersion || 'N/A'})`);
-      ws.send(JSON.stringify({ type: 'registered', payload: { id: payload.id } }));
-      broadcastToClients();
+      // 异步验证 token，验证完再注册
+      (async () => {
+        let botId = null;
+        if (pool && connToken && connAgentId) {
+          try {
+            const [rows] = await pool.execute(
+              'SELECT bot_id FROM bots WHERE token = ? AND bot_id = ? AND is_active = 1',
+              [connToken, connAgentId]
+            );
+            if (rows.length > 0) {
+              botId = rows[0].bot_id;
+            } else {
+              console.warn(`[Hub] Agent 验证失败: token 不匹配 agentId=${connAgentId}`);
+              ws.send(JSON.stringify({ type: 'error', payload: { message: 'invalid token or botId' } }));
+              ws.close();
+              return;
+            }
+          } catch (e) {
+            console.error('[Hub] Token 验证出错:', e.message);
+          }
+        }
+
+        const agent = {
+          id: payload.id,
+          name: payload.name || payload.id,
+          host: payload.host,
+          agentVersion: payload.agentVersion,
+          status: 'online',
+          lastSeen: Date.now(),
+          botId,          // 关联的 bot_id
+          gateway: null,
+          sessions: [],
+          stats: null,
+          ws
+        };
+        agents.set(payload.id, agent);
+        setAgentId(payload.id);
+        console.log(`[Hub] Agent 注册: ${agent.name} @ ${agent.host} (v${payload.agentVersion || 'N/A'}) botId=${botId}`);
+        ws.send(JSON.stringify({ type: 'registered', payload: { id: payload.id } }));
+        broadcastToClients();
+      })();
       break;
     }
     case 'heartbeat':
