@@ -211,6 +211,32 @@ async function createTables() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
+    // 消息已读记录表
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS message_reads (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        message_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(32) NOT NULL,
+        read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_read (message_id, user_id),
+        INDEX idx_message_id (message_id),
+        INDEX idx_user_id (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // 消息提及记录表
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS message_mentions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        message_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(32) NOT NULL,
+        mention_all BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_message_id (message_id),
+        INDEX idx_user_id (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
   } catch (e) {
     console.error('[DB] 创建表失败:', e.message);
   }
@@ -419,6 +445,25 @@ function broadcastChatMessage(conversationId, message) {
     payload: {
       conversationId,
       ...message
+    }
+  });
+
+  clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+}
+
+/**
+ * 广播聊天事件给所有客户端（如撤回通知）
+ */
+function broadcastChatEvent(conversationId, event) {
+  const data = JSON.stringify({
+    ...event,
+    payload: {
+      ...event.payload,
+      conversationId
     }
   });
 
@@ -1903,8 +1948,9 @@ async function start() {
   // 初始化飞书集成
   global.feishuIntegration = registerFeishuRoutes(server, pool, agents, broadcastChatMessage);
   
-  // 暴露 broadcastChatMessage 供 chat-routes 使用
+  // 暴露广播函数供 chat-routes 使用
   global.broadcastChatMessage = broadcastChatMessage;
+  global.broadcastChatEvent = broadcastChatEvent;
   
   server.listen(PORT, () => {
     console.log(`🦞 龙虾营地 Hub`);

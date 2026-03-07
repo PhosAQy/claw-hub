@@ -3,6 +3,34 @@
  */
 
 const crypto = require('crypto');
+const COS = require('cos-nodejs-sdk-v5');
+const multer = require('multer');
+
+// 配置 COS 客户端
+const cosClient = new COS({
+  SecretId: process.env.COS_SECRET_ID,
+  SecretKey: process.env.COS_SECRET_KEY,
+});
+
+// COS 配置
+const COS_BUCKET = 'openclaw-memory-1307257815';
+const COS_REGION = 'ap-guangzhou';
+
+// 配置 multer 用于内存存储（不上传到本地）
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB 限制
+  },
+  fileFilter: (req, file, cb) => {
+    // 只允许图片类型
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('只支持图片文件'), false);
+    }
+  }
+});
 
 /**
  * 生成唯一 ID
@@ -14,6 +42,84 @@ function generateId(prefix = '') {
     str += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return prefix ? `${prefix}_${str}` : str;
+}
+
+/**
+ * 转义正则特殊字符
+ */
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 从消息内容中解析 @ 提及
+ * 支持格式: @用户名 或 @全体成员
+ */
+async function parseMentions(pool, content, conversationId) {
+  const mentions = [];
+  let mentionAll = false;
+
+  // 检测 @全体成员 或 @all
+  if (/@全体成员|@all/i.test(content)) {
+    mentionAll = true;
+  }
+
+  // 获取会话成员列表
+  const [members] = await pool.query(`
+    SELECT cm.user_id, u.username, b.name as bot_name
+    FROM conversation_members cm
+    LEFT JOIN users u ON cm.user_id = u.user_id
+    LEFT JOIN bots b ON cm.user_id = b.bot_id
+    WHERE cm.conversation_id = ?
+  `, [conversationId]);
+
+  // 从成员列表中匹配 @用户名
+  if (members && members.length > 0) {
+    for (const member of members) {
+      const name = member.username || member.bot_name;
+      if (name) {
+        const regex = new RegExp(`@${escapeRegExp(name)}`, 'g');
+        if (regex.test(content)) {
+          mentions.push(member.user_id);
+        }
+      }
+    }
+  }
+
+  return { mentions, mentionAll };
+}
+
+/**
+ * 广播已读通知
+ */
+function broadcastReadNotification(conversationId, messageId, userId) {
+  if (global.broadcastChatEvent) {
+    global.broadcastChatEvent(conversationId, {
+      type: 'message-read',
+      payload: {
+        messageId,
+        userId,
+        readAt: new Date().toISOString()
+      }
+    });
+  }
+}
+
+/**
+ * 广播提及通知
+ */
+function broadcastMentionNotification(conversationId, messageId, mentionedUserIds, mentionAll) {
+  if (global.broadcastChatEvent) {
+    global.broadcastChatEvent(conversationId, {
+      type: 'mention',
+      payload: {
+        messageId,
+        conversationId,
+        mentionedUserIds,
+        mentionAll
+      }
+    });
+  }
 }
 
 /**
@@ -181,7 +287,7 @@ function registerChatRoutes(server, pool, agents) {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const { conversationId, content, messageType = 'text', replyTo } = JSON.parse(body);
+        const { conversationId, content, messageType = 'text', replyTo, mentions: inputMentions, mentionAll: inputMentionAll } = JSON.parse(body);
         const campKey = req.headers['x-camp-key'];
         
         const [users] = await pool.query(
@@ -197,14 +303,24 @@ function registerChatRoutes(server, pool, agents) {
         const username = users[0].username;
         
         // 验证用户是否在会话中
-        const [members] = await pool.query(
+        const [memberCheck] = await pool.query(
           'SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?',
           [conversationId, userId]
         );
-        if (!members.length) {
+        if (!memberCheck.length) {
           res.writeHead(403, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '无权发送消息' }));
           return;
+        }
+        
+        // 解析 @ 提及（如果前端没传，则从内容解析）
+        let mentions = inputMentions || [];
+        let mentionAll = inputMentionAll || false;
+        
+        if (mentions.length === 0 && !mentionAll) {
+          const parsed = await parseMentions(pool, content, conversationId);
+          mentions = parsed.mentions;
+          mentionAll = parsed.mentionAll;
         }
         
         // 保存消息
@@ -221,9 +337,38 @@ function registerChatRoutes(server, pool, agents) {
         );
         const message = messages[0];
         
+        // 保存 @ 提及记录
+        if (mentions.length > 0 || mentionAll) {
+          // 获取所有会话成员（用于 @全体成员）
+          let allUserIds = [];
+          if (mentionAll) {
+            const [allMembers] = await pool.query(
+              'SELECT user_id FROM conversation_members WHERE conversation_id = ?',
+              [conversationId]
+            );
+            allUserIds = allMembers.map(m => m.user_id).filter(id => id !== userId);
+          }
+          
+          const usersToMention = mentionAll ? allUserIds : mentions;
+          
+          for (const mentionedUserId of usersToMention) {
+            await pool.query(
+              'INSERT INTO message_mentions (message_id, user_id, mention_all) VALUES (?, ?, ?)',
+              [messageId, mentionedUserId, mentionAll && allUserIds.includes(mentionedUserId)]
+            );
+          }
+          
+          // 广播提及通知
+          broadcastMentionNotification(conversationId, messageId, usersToMention, mentionAll);
+        }
+        
         // 实时广播消息给所有客户端（用户聊天也需要实时推送）
         if (global.broadcastChatMessage && message) {
-          global.broadcastChatMessage(conversationId, message);
+          global.broadcastChatMessage(conversationId, {
+            ...message,
+            mentions,
+            mentionAll
+          });
         }
         
         // 获取会话类型
@@ -493,6 +638,390 @@ function registerChatRoutes(server, pool, agents) {
       console.error('[Chat] 获取成员列表失败:', e.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: '获取成员列表失败' }));
+    }
+  });
+  
+  // ──────────────────────────────────────────────
+  // 已读回执功能
+  // ──────────────────────────────────────────────
+  
+  // 标记消息已读
+  server.on('request', async (req, res) => {
+    if (!req.url.match(/\/api\/chat\/message\/[^/]+\/read$/) || req.method !== 'POST') return;
+    
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      const messageId = url.pathname.split('/')[4];
+      const campKey = req.headers['x-camp-key'];
+      
+      const [users] = await pool.query(
+        'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+        [campKey]
+      );
+      if (!users.length) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '未授权' }));
+        return;
+      }
+      const userId = users[0].user_id;
+      
+      // 获取消息信息
+      const [messages] = await pool.query(
+        'SELECT m.*, c.type as conv_type FROM messages m JOIN conversations c ON m.conversation_id = c.conversation_id WHERE m.message_id = ?',
+        [messageId]
+      );
+      
+      if (!messages.length) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '消息不存在' }));
+        return;
+      }
+      
+      const message = messages[0];
+      
+      // 验证用户是否在会话中
+      const [memberCheck] = await pool.query(
+        'SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?',
+        [message.conversation_id, userId]
+      );
+      if (!memberCheck.length) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '无权标记已读' }));
+        return;
+      }
+      
+      // 不能标记自己发的消息为已读
+      if (message.sender_id === userId && message.sender_type === 'user') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: '不能标记自己的消息为已读' }));
+        return;
+      }
+      
+      // 插入已读记录（使用 INSERT IGNORE 避免重复）
+      await pool.query(
+        'INSERT IGNORE INTO message_reads (message_id, user_id) VALUES (?, ?)',
+        [messageId, userId]
+      );
+      
+      // 广播已读通知
+      broadcastReadNotification(message.conversation_id, messageId, userId);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+      
+    } catch (e) {
+      console.error('[Chat] 标记已读失败:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '标记已读失败' }));
+    }
+  });
+  
+  // 获取消息已读列表
+  server.on('request', async (req, res) => {
+    if (!req.url.match(/\/api\/chat\/message\/[^/]+\/reads$/) || req.method !== 'GET') return;
+    
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      const messageId = url.pathname.split('/')[4];
+      const campKey = req.headers['x-camp-key'];
+      
+      const [users] = await pool.query(
+        'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+        [campKey]
+      );
+      if (!users.length) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '未授权' }));
+        return;
+      }
+      
+      // 获取消息信息
+      const [messages] = await pool.query(
+        'SELECT * FROM messages WHERE message_id = ?',
+        [messageId]
+      );
+      
+      if (!messages.length) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '消息不存在' }));
+        return;
+      }
+      
+      const message = messages[0];
+      
+      // 获取已读用户列表
+      const [reads] = await pool.query(`
+        SELECT mr.user_id, mr.read_at, u.username
+        FROM message_reads mr
+        LEFT JOIN users u ON mr.user_id = u.user_id
+        WHERE mr.message_id = ?
+        ORDER BY mr.read_at ASC
+      `, [messageId]);
+      
+      // 获取会话总成员数（用于计算已读比例）
+      const [memberCount] = await pool.query(
+        'SELECT COUNT(*) as total FROM conversation_members WHERE conversation_id = ?',
+        [message.conversation_id]
+      );
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        reads,
+        total: memberCount[0].total,
+        readCount: reads.length
+      }));
+      
+    } catch (e) {
+      console.error('[Chat] 获取已读列表失败:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '获取已读列表失败' }));
+    }
+  });
+  
+  // ──────────────────────────────────────────────
+  // @ 提及功能
+  // ──────────────────────────────────────────────
+  
+  // 获取我被 @ 的消息列表
+  server.on('request', async (req, res) => {
+    if (req.url !== '/api/chat/mentions' || req.method !== 'GET') return;
+    
+    try {
+      const campKey = req.headers['x-camp-key'];
+      const url = new URL(req.url, 'http://localhost');
+      const limit = parseInt(url.searchParams.get('limit') || '50');
+      const offset = parseInt(url.searchParams.get('offset') || '0');
+      
+      const [users] = await pool.query(
+        'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+        [campKey]
+      );
+      if (!users.length) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '未授权' }));
+        return;
+      }
+      const userId = users[0].user_id;
+      
+      // 获取我被 @ 的消息
+      const [mentions] = await pool.query(`
+        SELECT mm.message_id, mm.mention_all, mm.created_at as mentioned_at,
+               m.content, m.sender_id, m.conversation_id, m.created_at as message_at,
+               u.username as sender_name,
+               c.name as conversation_name, c.type as conversation_type
+        FROM message_mentions mm
+        JOIN messages m ON mm.message_id = m.message_id
+        JOIN users u ON m.sender_id = u.user_id
+        JOIN conversations c ON m.conversation_id = c.conversation_id
+        WHERE mm.user_id = ? AND m.is_deleted = FALSE
+        ORDER BY mm.created_at DESC
+        LIMIT ? OFFSET ?
+      `, [userId, limit, offset]);
+      
+      // 获取总数
+      const [countResult] = await pool.query(`
+        SELECT COUNT(*) as total
+        FROM message_mentions mm
+        JOIN messages m ON mm.message_id = m.message_id
+        WHERE mm.user_id = ? AND m.is_deleted = FALSE
+      `, [userId]);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        mentions,
+        total: countResult[0].total,
+        limit,
+        offset
+      }));
+      
+    } catch (e) {
+      console.error('[Chat] 获取提及列表失败:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '获取提及列表失败' }));
+    }
+  });
+  
+  // ──────────────────────────────────────────────
+  // 消息撤回功能
+  // ──────────────────────────────────────────────
+  
+  // 撤回消息
+  server.on('request', async (req, res) => {
+    if (!req.url.match(/\/api\/chat\/message\/[^/]+$/) || req.method !== 'DELETE') return;
+    
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      const messageId = url.pathname.split('/').pop();
+      const campKey = req.headers['x-camp-key'];
+      
+      // 验证用户
+      const [users] = await pool.query(
+        'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+        [campKey]
+      );
+      if (!users.length) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '未授权' }));
+        return;
+      }
+      const userId = users[0].user_id;
+      
+      // 获取消息
+      const [messages] = await pool.query(
+        'SELECT * FROM messages WHERE message_id = ?',
+        [messageId]
+      );
+      
+      if (!messages.length) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '消息不存在' }));
+        return;
+      }
+      
+      const message = messages[0];
+      
+      // 验证是否是自己的消息
+      if (message.sender_id !== userId || message.sender_type !== 'user') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '只能撤回自己的消息' }));
+        return;
+      }
+      
+      // 验证是否在2分钟内
+      const messageTime = new Date(message.created_at).getTime();
+      const now = Date.now();
+      const twoMinutes = 2 * 60 * 1000;
+      
+      if (now - messageTime > twoMinutes) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '只能撤回2分钟内的消息' }));
+        return;
+      }
+      
+      // 验证消息是否已删除
+      if (message.is_deleted) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '消息已被撤回' }));
+        return;
+      }
+      
+      // 标记消息为已删除（撤回）
+      await pool.query(
+        'UPDATE messages SET is_deleted = TRUE WHERE message_id = ?',
+        [messageId]
+      );
+      
+      // 广播撤回通知给所有客户端
+      if (global.broadcastChatEvent) {
+        global.broadcastChatEvent(message.conversation_id, {
+          type: 'message-recalled',
+          payload: {
+            messageId,
+            conversationId: message.conversation_id,
+            recalledBy: userId,
+            recalledAt: new Date().toISOString()
+          }
+        });
+      }
+      
+      console.log(`[Chat] 消息 ${messageId} 已被用户 ${userId} 撤回`);
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: '消息已撤回' }));
+      
+    } catch (e) {
+      console.error('[Chat] 撤回消息失败:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '撤回消息失败' }));
+    }
+  });
+  
+  // ──────────────────────────────────────────────
+  // 图片上传功能
+  // ──────────────────────────────────────────────
+  
+  // 上传图片
+  server.on('request', async (req, res) => {
+    if (req.url !== '/api/chat/upload' || req.method !== 'POST') return;
+    
+    const campKey = req.headers['x-camp-key'];
+    
+    // 验证用户
+    try {
+      const [users] = await pool.query(
+        'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+        [campKey]
+      );
+      if (!users.length) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '未授权' }));
+        return;
+      }
+      const userId = users[0].user_id;
+      
+      // 使用 multer 处理文件上传
+      upload.single('image')(req, res, async (err) => {
+        if (err) {
+          console.error('[Chat] 上传处理错误:', err.message);
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message || '上传失败' }));
+          return;
+        }
+        
+        if (!req.file) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '请选择图片文件' }));
+          return;
+        }
+        
+        try {
+          // 生成唯一文件名
+          const ext = req.file.originalname.split('.').pop() || 'jpg';
+          const timestamp = Date.now();
+          const randomStr = crypto.randomBytes(8).toString('hex');
+          const fileName = `chat-images/${timestamp}_${randomStr}.${ext}`;
+          
+          // 上传到 COS
+          const uploadResult = await new Promise((resolve, reject) => {
+            cosClient.putObject({
+              Bucket: COS_BUCKET,
+              Region: COS_REGION,
+              Key: fileName,
+              Body: req.file.buffer,
+              ContentType: req.file.mimetype,
+            }, (err, data) => {
+              if (err) reject(err);
+              else resolve(data);
+            });
+          });
+          
+          // 构建访问 URL
+          const imageUrl = `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${fileName}`;
+          
+          console.log(`[Chat] 用户 ${userId} 上传图片成功: ${imageUrl}`);
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            url: imageUrl,
+            fileName: req.file.originalname,
+            size: req.file.size,
+            mimeType: req.file.mimetype
+          }));
+          
+        } catch (uploadErr) {
+          console.error('[Chat] COS 上传失败:', uploadErr.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '图片上传失败' }));
+        }
+      });
+      
+    } catch (e) {
+      console.error('[Chat] 上传图片失败:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '上传图片失败' }));
     }
   });
 }
