@@ -874,6 +874,34 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Gateway 重启
+  if (req.url.startsWith('/api/gateway/restart')) {
+    const url = new URL(req.url, 'http://x');
+    const agentId = url.searchParams.get('agent') || 'main';
+    const token = url.searchParams.get('token');
+    
+    // 验证 token
+    if (token !== UPDATE_TOKEN) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid token' }));
+      return;
+    }
+    
+    const agent = agents.get(agentId);
+    if (!agent || !agent.ws) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Agent not found or offline' }));
+      return;
+    }
+    
+    // 发送重启命令到 Agent
+    agent.ws.send(JSON.stringify({ type: 'gateway-restart', payload: { token } }));
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: 'Gateway restart command sent' }));
+    return;
+  }
+
   // 获取会话历史
   if (req.url.startsWith('/api/session/history')) {
     const url = new URL(req.url, 'http://x');
