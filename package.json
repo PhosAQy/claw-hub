@@ -23,6 +23,8 @@
     "url": "https://github.com/PhosAQy/claw-hub.git"
   },
   "dependencies": {
+    "cos-nodejs-sdk-v5": "^2.15.4",
+    "multer": "^2.1.1",
     "mysql2": "^3.6.0",
     "ws": "^8.14.0"
   }
