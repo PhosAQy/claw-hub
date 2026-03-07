@@ -1167,7 +1167,7 @@ const server = http.createServer((req, res) => {
       
       try {
         const [bots] = await pool.query(
-          'SELECT bot_id, name, description, avatar, created_at, is_active FROM bots WHERE user_id = ? AND is_active = TRUE ORDER BY created_at DESC',
+          'SELECT bot_id, name, description, avatar, created_at, is_active, auto_connect FROM bots WHERE user_id = ? AND is_active = TRUE ORDER BY created_at DESC',
           [userId]
         );
         
@@ -1302,6 +1302,48 @@ const server = http.createServer((req, res) => {
         console.error('[Bot] 重新生成 token 失败:', e.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: '重新生成 Token 失败' }));
+      }
+    });
+    return;
+  }
+
+  // POST /api/bot/auto-connect — 设置 Bot 自动连接状态（持久化到 DB）
+  if (req.url === '/api/bot/auto-connect' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { botId, autoConnect } = JSON.parse(body);
+        const campKey = req.headers['x-camp-key'];
+
+        if (!botId || campKey === undefined) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '参数不完整' }));
+          return;
+        }
+
+        const [users] = await pool.execute(
+          'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+          [campKey]
+        );
+        if (!users.length) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '未授权' }));
+          return;
+        }
+        const userId = users[0].user_id;
+
+        await pool.execute(
+          'UPDATE bots SET auto_connect = ? WHERE bot_id = ? AND user_id = ? AND is_active = TRUE',
+          [autoConnect ? 1 : 0, botId, userId]
+        );
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (e) {
+        console.error('[Bot] 设置自动连接失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '设置失败' }));
       }
     });
     return;

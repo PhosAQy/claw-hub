@@ -2522,10 +2522,12 @@
           </div>
         `).join('');
         
-        // 自动连接：检查 localStorage 中的 autoConnect 状态
-        const autoConnect = JSON.parse(localStorage.getItem('clawCampAutoConnect') || '{}');
+        // 缓存 bot 列表供其他函数使用
+        window._botListCache = data.bots;
+
+        // 自动连接：从 DB 读取 auto_connect 状态（持久化）
         data.bots.forEach(bot => {
-          if (autoConnect[bot.bot_id] === 1) {
+          if (bot.auto_connect === 1) {
             checkBotStatus(bot.bot_id, false); // false = 不更新 autoConnect 状态
           }
         });
@@ -2561,11 +2563,13 @@
           badge.textContent = '● 在线';
           if (btn) { btn.disabled = false; btn.textContent = '🔄 刷新'; }
           
-          // 保存自动连接状态
+          // 保存自动连接状态到 DB
           if (saveAutoConnect) {
-            const autoConnect = JSON.parse(localStorage.getItem('clawCampAutoConnect') || '{}');
-            autoConnect[botId] = 1;
-            localStorage.setItem('clawCampAutoConnect', JSON.stringify(autoConnect));
+            fetch('/api/bot/auto-connect', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-camp-key': currentUser.campKey },
+              body: JSON.stringify({ botId, autoConnect: true })
+            }).catch(() => {});
           }
 
           // 兼容 sessions 是对象或数组
@@ -2630,9 +2634,9 @@
           badge.textContent = '● 离线';
           if (btn) { btn.disabled = false; btn.textContent = '🔌 连接'; }
           
-          // 检查是否有自动连接状态
-          const autoConnect = JSON.parse(localStorage.getItem('clawCampAutoConnect') || '{}');
-          if (autoConnect[botId] === 1) {
+          // 检查是否有自动连接状态（从 DB 读取，通过 bot list 的 auto_connect 字段）
+          const botData = (window._botListCache || []).find(b => b.bot_id === botId);
+          if (botData && botData.auto_connect === 1) {
             detail.innerHTML = `
               <div class="agent-connect-info not-connected">
                 <p>⚠️ Agent 未连接</p>
@@ -2651,12 +2655,20 @@
       }
     }
     
-    // 取消自动连接
+    // 取消自动连接（持久化到 DB）
     function disableAutoConnect(botId) {
-      const autoConnect = JSON.parse(localStorage.getItem('clawCampAutoConnect') || '{}');
-      autoConnect[botId] = 0;
-      localStorage.setItem('clawCampAutoConnect', JSON.stringify(autoConnect));
-      
+      fetch('/api/bot/auto-connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-camp-key': currentUser.campKey },
+        body: JSON.stringify({ botId, autoConnect: false })
+      }).catch(() => {});
+
+      // 更新缓存
+      if (window._botListCache) {
+        const bot = window._botListCache.find(b => b.bot_id === botId);
+        if (bot) bot.auto_connect = 0;
+      }
+
       // 更新 UI
       const detail = document.getElementById(`detail-${botId}`);
       if (detail) detail.innerHTML = '';
