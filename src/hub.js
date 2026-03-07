@@ -581,7 +581,7 @@ async function doUpdate() {
     exec('git reset --hard HEAD && git clean -fd', { cwd: projectDir, timeout: 10000 }, () => {
       // 忽略 reset 错误，继续 pull
     });
-    exec('git fetch origin && git reset --hard origin/main', { cwd: projectDir, timeout: 30000 }, (err, stdout, stderr) => {
+    exec('git remote set-url origin https://github.com/PhosAQy/claw-hub.git && git fetch origin && git reset --hard origin/main', { cwd: projectDir, timeout: 30000 }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(`Git pull failed: ${stderr}`));
         return;
