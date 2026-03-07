@@ -1488,7 +1488,12 @@ const server = http.createServer((req, res) => {
   }
 
 
-    res.writeHead(404); res.end('Not Found');
+  // /api/chat/* 路由交给 chat-routes 的 request 监听器处理
+  if (req.url.startsWith('/api/chat/') || req.url.startsWith('/api/groups/') || req.url.startsWith('/api/users/')) {
+    return; // 不发 404，让 chat-routes 的 server.on('request') 处理
+  }
+
+  res.writeHead(404); res.end('Not Found');
 });
 
 const wss = new WebSocket.Server({ server });
