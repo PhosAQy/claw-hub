@@ -1595,6 +1595,30 @@ async function start() {
   global.broadcastChatMessage = broadcastChatMessage;
   global.broadcastChatEvent = broadcastChatEvent;
   
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`⚠️  端口 ${PORT} 被占用，尝试杀掉旧进程...`);
+      try {
+        const pids = execSync(`lsof -ti tcp:${PORT}`, { encoding: 'utf-8' }).trim();
+        if (pids) {
+          for (const pid of pids.split('\n')) {
+            if (pid && parseInt(pid) !== process.pid) {
+              try { process.kill(parseInt(pid), 'SIGTERM'); } catch (_) {}
+            }
+          }
+          console.log(`   已终止旧进程 (${pids.replace(/\n/g, ', ')})，2s 后重试...`);
+          setTimeout(() => server.listen(PORT), 2000);
+        }
+      } catch (_) {
+        console.error(`❌ 无法清理端口 ${PORT}，请手动处理: lsof -ti tcp:${PORT} | xargs kill`);
+        process.exit(1);
+      }
+    } else {
+      console.error('❌ 服务器启动失败:', err);
+      process.exit(1);
+    }
+  });
+
   server.listen(PORT, () => {
     console.log(`🦞 龙虾营地 Hub`);
     console.log(`   WebSocket: ws://localhost:${PORT}`);
