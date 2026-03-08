@@ -1631,18 +1631,24 @@ async function start() {
     if (err.code === 'EADDRINUSE') {
       console.log(`⚠️  端口 ${PORT} 被占用，尝试杀掉旧进程...`);
       try {
-        const pids = execSync(`lsof -ti tcp:${PORT}`, { encoding: 'utf-8' }).trim();
+        // Linux: fuser; macOS: lsof
+        let pids = '';
+        try {
+          pids = execSync(`fuser ${PORT}/tcp 2>/dev/null || lsof -ti tcp:${PORT} 2>/dev/null`, { encoding: 'utf-8' }).trim();
+        } catch (_) {}
         if (pids) {
-          for (const pid of pids.split('\n')) {
+          for (const pid of pids.split(/\s+/)) {
             if (pid && parseInt(pid) !== process.pid) {
-              try { process.kill(parseInt(pid), 'SIGTERM'); } catch (_) {}
+              try { process.kill(parseInt(pid), 'SIGKILL'); } catch (_) {}
             }
           }
-          console.log(`   已终止旧进程 (${pids.replace(/\n/g, ', ')})，2s 后重试...`);
-          setTimeout(() => server.listen(PORT), 2000);
+          console.log(`   已终止旧进程 (${pids.trim()})，2s 后重试...`);
+        } else {
+          console.log(`   未找到占用进程，2s 后重试...`);
         }
+        setTimeout(() => server.listen(PORT), 2000);
       } catch (_) {
-        console.error(`❌ 无法清理端口 ${PORT}，请手动处理: lsof -ti tcp:${PORT} | xargs kill`);
+        console.error(`❌ 无法清理端口 ${PORT}`);
         process.exit(1);
       }
     } else {
