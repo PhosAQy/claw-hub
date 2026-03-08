@@ -1380,6 +1380,28 @@ async function handleBotReply(pool, agents, conversationId, botId, userMessage, 
     }
   }
 
+  // 如果 WS 已断但 status 未更新，立即修正
+  if (targetAgent && targetAgent.ws && targetAgent.ws.readyState !== 1) {
+    console.log(`[Chat] Agent ${targetAgent.id} WS 已断开(state=${targetAgent.ws.readyState})，等待重连...`);
+    // 等待最多 8s，看 Agent 是否重连
+    await new Promise(resolve => {
+      let waited = 0;
+      const check = setInterval(() => {
+        waited += 500;
+        // 重新查找（重连后 ws 会更新）
+        for (const [, agent] of agents) {
+          if (agent.botId === botId && agent.status === 'online' && agent.ws && agent.ws.readyState === 1) {
+            targetAgent = agent;
+            clearInterval(check);
+            resolve(true);
+            return;
+          }
+        }
+        if (waited >= 8000) { clearInterval(check); resolve(false); }
+      }, 500);
+    });
+  }
+
   if (targetAgent && targetAgent.ws && targetAgent.ws.readyState === 1) {
     // 发送 typing 指示器，让前端显示 "Bot 正在输入..."
     if (global.broadcastChatMessage) {
@@ -1407,7 +1429,7 @@ async function handleBotReply(pool, agents, conversationId, botId, userMessage, 
   }
 
   // 无 Agent 在线：保存离线提示并广播给前端
-  const reply = `你好 ${username}！Agent 当前不在线，请稍后再试。`;
+  const reply = `抱歉，AI 正在重启中，请 30 秒后再试。`;
   const messageId = generateId('msg');
   await pool.query(
     'INSERT INTO messages (message_id, conversation_id, sender_id, sender_type, content, message_type) VALUES (?, ?, ?, ?, ?, ?)',
