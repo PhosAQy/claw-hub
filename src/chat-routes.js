@@ -377,21 +377,27 @@ function registerChatRoutes(server, pool, agents) {
           [conversationId]
         );
         const convType = convs[0]?.type;
-        
-        // 如果是机器人会话，触发机器人回复
-        if (convType === 'bot') {
-          // 获取 bot_id（会话成员中的 bot）
+
+        // 触发机器人回复：
+        // 1. bot 类型会话（1v1）：自动回复
+        // 2. group 类型会话：当 @提及 bot 时回复
+        if (convType === 'bot' || convType === 'group') {
           const [botMembers] = await pool.query(
             'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id LIKE "bot_%"',
             [conversationId]
           );
-          
-          if (botMembers.length > 0) {
-            const botId = botMembers[0].user_id;
-            
+
+          for (const botMember of botMembers) {
+            const botId = botMember.user_id;
+
+            // group 会话需要 @提及 bot 才触发回复
+            if (convType === 'group' && !mentions.includes(botId) && !mentionAll) {
+              continue;
+            }
+
             // 异步处理机器人回复（不阻塞响应）
             handleBotReply(pool, agents, conversationId, botId, content, userId, username).catch(e => {
-              console.error('[Chat] Bot 回复失败:', e.message);
+              console.error(`[Chat] Bot ${botId} 回复失败:`, e.message);
             });
           }
         }
@@ -1336,15 +1342,24 @@ server.on('request', async (req, res) => {
 });
 
 }
+/**
+ * 处理机器人回复
+ * 消息流程: 前端 → Hub(HTTP) → Agent(WebSocket) → Hub(chat-reply) → 前端(WebSocket)
+ *
+ * 1. 查找 botId 对应的在线 Agent
+ * 2. 发送 typing 指示器，通知前端 Bot 正在思考
+ * 3. 通过 WebSocket 将 chat-message 转发给 Agent
+ * 4. Agent 处理后通过 chat-reply 回复（见 hub.js 中的 chat-reply handler）
+ * 5. Hub 保存回复到 DB 并广播给前端
+ */
 async function handleBotReply(pool, agents, conversationId, botId, userMessage, userId, username) {
   const [bots] = await pool.query(
     'SELECT * FROM bots WHERE bot_id = ? AND is_active = TRUE',
     [botId]
   );
   if (!bots.length) return;
-  const bot = bots[0];
 
-  // 检查是否有 agent 在线
+  // 查找绑定了此 botId 且在线的 Agent
   let targetAgent = null;
   for (const [agentId, agent] of agents) {
     if (agent.botId === botId && agent.status === 'online') {
@@ -1354,6 +1369,17 @@ async function handleBotReply(pool, agents, conversationId, botId, userMessage, 
   }
 
   if (targetAgent && targetAgent.ws && targetAgent.ws.readyState === 1) {
+    // 发送 typing 指示器，让前端显示 "Bot 正在输入..."
+    if (global.broadcastChatMessage) {
+      global.broadcastChatMessage(conversationId, {
+        type: 'typing',
+        sender_id: botId,
+        sender_type: 'bot',
+        conversation_id: conversationId
+      });
+    }
+
+    // 转发消息给 Agent（Agent 通过 channelRuntime.dispatchReply 回复）
     const sessionKey = `${botId}:direct:${userId}`;
     const userMsgId = generateId('msg');
     targetAgent.ws.send(JSON.stringify({
@@ -1364,11 +1390,11 @@ async function handleBotReply(pool, agents, conversationId, botId, userMessage, 
         msgType: 'text', timestamp: Date.now()
       }
     }));
-    console.log(`[Chat] 已转发消息给 Agent ${targetAgent.id}, botId=${botId}`);
+    console.log(`[Chat] 已转发消息给 Agent ${targetAgent.id}, botId=${botId}, conv=${conversationId}`);
     return;
   }
 
-  // 无 agent 在线，备用回复
+  // 无 Agent 在线：保存离线提示并广播给前端
   const reply = `你好 ${username}！Agent 当前不在线，请稍后再试。`;
   const messageId = generateId('msg');
   await pool.query(

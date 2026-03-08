@@ -300,146 +300,9 @@ async function saveTokenUsage(agentId, agentName, tokenUsage) {
   }
 }
 
-/**
- * Bot 智能回复生成
- * 调用 LLM API 生成回复，并推送给用户
- */
-async function generateBotReply(conversationId, botId, userMessage) {
-  if (!pool) return;
-
-  try {
-    // 获取 Bot 信息
-    const [bots] = await pool.query(
-      'SELECT name FROM bots WHERE bot_id = ? AND is_active = TRUE',
-      [botId]
-    );
-    const botName = bots[0]?.name || 'AI 助手';
-
-    // 获取对话历史（最近 10 条）
-    const [history] = await pool.query(
-      `SELECT sender_id, content, sender_type FROM messages
-       WHERE conversation_id = ? AND is_deleted = FALSE
-       ORDER BY created_at DESC LIMIT 10`,
-      [conversationId]
-    );
-
-    // 构建对话上下文
-    const messages = history.reverse().map(m => ({
-      role: m.sender_type === 'bot' ? 'assistant' : 'user',
-      content: m.content
-    }));
-
-    // 添加系统提示
-    messages.unshift({
-      role: 'system',
-      content: `你是${botName}，一个友好的 AI 助手。请简洁、专业地回答用户的问题。`
-    });
-
-    // 调用 LLM API（使用智谱 AI GLM-4 Flash）
-    const https = require('https');
-    const llmApiKey = process.env.ZHIPU_API_KEY;
-
-    let botReply = '抱歉，我现在有点忙，稍后回复你。';
-
-    if (llmApiKey) {
-      try {
-        const response = await new Promise((resolve, reject) => {
-          const postData = JSON.stringify({
-            model: 'glm-4-flash',
-            messages: messages,
-            max_tokens: 1024,
-            temperature: 0.7
-          });
-
-          const req = https.request({
-            hostname: 'open.bigmodel.cn',
-            port: 443,
-            path: '/api/paas/v4/chat/completions',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${llmApiKey}`
-            }
-          }, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-              try {
-                resolve(JSON.parse(data));
-              } catch (e) {
-                reject(e);
-              }
-            });
-          });
-
-          req.on('error', reject);
-          req.write(postData);
-          req.end();
-        });
-
-        if (response.choices && response.choices[0]?.message?.content) {
-          botReply = response.choices[0].message.content.trim();
-        }
-      } catch (e) {
-        console.error('[Bot] LLM 调用失败:', e.message);
-      }
-    } else {
-      // 没有配置 API Key，使用简单回复
-      botReply = generateSimpleReply(userMessage, botName);
-    }
-
-    // 保存 Bot 回复到数据库
-    const crypto = require('crypto');
-    const replyId = 'msg_' + crypto.randomBytes(8).toString('hex');
-    await pool.query(
-      'INSERT INTO messages (message_id, conversation_id, sender_id, sender_type, content, message_type) VALUES (?, ?, ?, ?, ?, ?)',
-      [replyId, conversationId, botId, 'bot', botReply, 'text']
-    );
-
-    // 获取保存的消息
-    const [savedMessages] = await pool.query('SELECT * FROM messages WHERE message_id = ?', [replyId]);
-    const savedReply = savedMessages[0];
-
-    // 通过 WebSocket 推送给用户
-    broadcastChatMessage(conversationId, savedReply);
-
-    console.log(`[Bot] ${botName} 已回复会话 ${conversationId}`);
-
-  } catch (e) {
-    console.error('[Bot] 生成回复失败:', e.message);
-  }
-}
-
-/**
- * 简单回复（无 LLM API 时的降级方案）
- */
-function generateSimpleReply(userMessage, botName) {
-  const msg = userMessage.toLowerCase();
-
-  if (msg.includes('你好') || msg.includes('hi') || msg.includes('hello')) {
-    return `你好！我是${botName}，有什么可以帮你的吗？`;
-  }
-
-  if (msg.includes('名字') || msg.includes('是谁')) {
-    return `我是${botName}，你的 AI 助手！`;
-  }
-
-  if (msg.includes('谢谢') || msg.includes('感谢')) {
-    return '不客气！有需要随时找我～';
-  }
-
-  if (msg.includes('再见') || msg.includes('拜拜')) {
-    return '再见！期待下次聊天～ 👋';
-  }
-
-  // 默认回复
-  const replies = [
-    '我收到你的消息了！不过现在还在学习中，暂时只能简单回复。请稍后再来找我聊天吧～',
-    '嗯嗯，我在听！不过我的智能回复功能还在完善中，感谢你的理解！',
-    '好的，收到！我现在还比较笨，但会越来越聪明的～'
-  ];
-  return replies[Math.floor(Math.random() * replies.length)];
-}
+// Bot 回复逻辑已移至 chat-routes.js 的 handleBotReply()
+// 消息流程: 前端 → Hub(HTTP) → Agent(WebSocket chat-message) → Agent 处理
+//          → Hub(WebSocket chat-reply) → DB → 前端(WebSocket broadcast)
 
 /**
  * 广播聊天消息给所有客户端
@@ -1639,12 +1502,18 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
     
     case 'chat-reply':
       // Agent 回复聊天消息
+      // 流程: Agent(channelRuntime.dispatchReply) → Hub(chat-reply) → DB → 前端(WebSocket broadcast)
       (async () => {
         const { msgId, reply, conversationId, sessionKey, botId: payloadBotId } = payload;
 
+        if (!conversationId || !reply) {
+          console.warn(`[Hub] chat-reply 缺少必要字段: conv=${conversationId}, reply=${!!reply}`);
+          return;
+        }
+
         console.log(`[Hub] 收到 Agent 回复: session=${sessionKey}, conv=${conversationId}`);
 
-        // 查找发送此回复的 Agent 的 botId
+        // 查找发送此回复的 Agent 的 botId（优先用 payload 中的，否则从 ws 连接查找）
         let senderBotId = payloadBotId || null;
         if (!senderBotId) {
           for (const [, agent] of agents) {
@@ -1655,31 +1524,31 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
           }
         }
 
-        // 保存回复到数据库
-        if (pool && conversationId && reply) {
-          try {
-            const replyMsgId = generateId('msg');
-            const agentId = senderBotId || 'bot';
-            
-            await pool.query(
-              'INSERT INTO messages (message_id, conversation_id, sender_id, sender_type, content, message_type) VALUES (?, ?, ?, ?, ?, ?)',
-              [replyMsgId, conversationId, agentId, 'bot', reply, 'text']
-            );
-            
-            // 获取保存的消息
-            const [messages] = await pool.query(
-              'SELECT * FROM messages WHERE message_id = ?',
-              [replyMsgId]
-            );
-            
-            // 广播给前端
-            if (messages[0] && global.broadcastChatMessage) {
-              global.broadcastChatMessage(conversationId, messages[0]);
-              console.log(`[Hub] Agent 回复已广播: ${replyMsgId}`);
-            }
-          } catch (e) {
-            console.error('[Hub] 保存 Agent 回复失败:', e.message);
+        if (!pool) return;
+
+        try {
+          // 保存回复到数据库
+          const replyMsgId = generateId('msg');
+          const agentId = senderBotId || 'bot';
+
+          await pool.query(
+            'INSERT INTO messages (message_id, conversation_id, sender_id, sender_type, content, message_type) VALUES (?, ?, ?, ?, ?, ?)',
+            [replyMsgId, conversationId, agentId, 'bot', reply, 'text']
+          );
+
+          // 获取完整消息（含 created_at 等字段）
+          const [messages] = await pool.query(
+            'SELECT * FROM messages WHERE message_id = ?',
+            [replyMsgId]
+          );
+
+          // 广播给前端（完成 Agent → Hub → 前端 的最后一步）
+          if (messages[0] && global.broadcastChatMessage) {
+            global.broadcastChatMessage(conversationId, messages[0]);
+            console.log(`[Hub] Agent 回复已广播: ${replyMsgId}, bot=${agentId}`);
           }
+        } catch (e) {
+          console.error('[Hub] 保存 Agent 回复失败:', e.message);
         }
       })();
       break;
