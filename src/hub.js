@@ -1421,15 +1421,17 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     if (isAgent && agentId && agents.has(agentId)) {
       const agent = agents.get(agentId);
-      // 只处理当前连接的 close 事件，忽略旧连接被关闭时的误触发
-      if (agent.ws !== ws) {
-        console.log(`[Hub] 忽略旧连接的 close 事件: ${agentId}`);
-        return;
+      // 从 sockets 中移除此连接
+      agent.sockets.delete(ws);
+      console.log(`[Hub] Agent ${agentId} 连接关闭，剩余 ${agent.sockets.size} 个连接`);
+      
+      // 只有当所有连接都关闭时才标记为离线
+      if (agent.sockets.size === 0) {
+        agent.status = 'offline';
+        agent.lastSeen = Date.now();
+        console.log(`[Hub] Agent 离线: ${agent.name}`);
+        broadcastToClients();
       }
-      agent.status = 'offline';
-      agent.lastSeen = Date.now();
-      console.log(`[Hub] Agent 离线: ${agent.name}`);
-      broadcastToClients();
     } else {
       clients.delete(ws);
     }
@@ -1464,11 +1466,17 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
           }
         }
 
-        // 关闭旧连接，避免假死连接占用资源
-        const oldAgent = agents.get(payload.id);
-        if (oldAgent && oldAgent.ws && oldAgent.ws !== ws) {
-          console.log(`[Hub] Agent ${payload.id} 重新注册，关闭旧连接`);
-          try { oldAgent.ws.terminate(); } catch (_) {}
+        // 同一 Agent ID 支持多连接（多 Gateway 场景）
+        if (agents.has(payload.id)) {
+          const existingAgent = agents.get(payload.id);
+          existingAgent.sockets.add(ws);  // 添加新连接
+          existingAgent.lastSeen = Date.now();
+          existingAgent.status = 'online';
+          console.log(`[Hub] Agent ${payload.id} 新增连接，共 ${existingAgent.sockets.size} 个`);
+          setAgentId(payload.id);
+          ws.send(JSON.stringify({ type: 'registered', payload: { id: payload.id } }));
+          broadcastToClients();
+          return;  // 不需要创建新 agent
         }
 
         const agent = {
@@ -1482,7 +1490,8 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
           gateway: null,
           sessions: [],
           stats: null,
-          ws
+          sockets: new Set([ws]),  // 支持多连接
+          get ws() { return this.sockets.values().next().value; }  // 兼容旧代码
         };
         agents.set(payload.id, agent);
         setAgentId(payload.id);
