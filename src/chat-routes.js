@@ -1416,20 +1416,28 @@ async function handleBotReply(pool, agents, conversationId, botId, userMessage, 
     // 转发消息给 Agent（Agent 通过 channelRuntime.dispatchReply 回复）
     const sessionKey = `${botId}:direct:${userId}`;
     const userMsgId = generateId('msg');
-    targetAgent.ws.send(JSON.stringify({
+    const msgData = JSON.stringify({
       type: 'chat-message',
       payload: {
         msgId: userMsgId, sessionKey, conversationId, botId,
         userId, username, content: userMessage,
         msgType: 'text', timestamp: Date.now()
       }
-    }));
+    });
+    // 广播到 Agent 的所有 WebSocket 连接（支持多 Gateway）
+    if (targetAgent.sockets && targetAgent.sockets.size > 0) {
+      targetAgent.sockets.forEach(ws => {
+        if (ws.readyState === 1) ws.send(msgData);
+      });
+    } else if (targetAgent.ws && targetAgent.ws.readyState === 1) {
+      targetAgent.ws.send(msgData);
+    }
     console.log(`[Chat] 已转发消息给 Agent ${targetAgent.id}, botId=${botId}, conv=${conversationId}`);
     return;
   }
 
   // 无 Agent 在线：保存离线提示并广播给前端
-  const reply = `抱歉，AI 正在重启中，请 30 秒后再试。`;
+  const reply = `抱歉，Agent 暂时不在线。消息已记录，Agent 上线后会尽快回复。`;
   const messageId = generateId('msg');
   await pool.query(
     'INSERT INTO messages (message_id, conversation_id, sender_id, sender_type, content, message_type) VALUES (?, ?, ?, ?, ?, ?)',
