@@ -1512,8 +1512,14 @@ module.exports = { registerChatRoutes };
 // 🔥 修复：推送给所有订阅了该 campKey 的客户端，不检查 conversationId
 // 🔥 使用 1 代替 WebSocket.OPEN（避免运行时 WebSocket 未定义问题）
 global.broadcastChatStream = function(conversationId, streamPayload) {
-  if (!global.clients) return;
-
+  if (!global.clients) {
+    console.log('[broadcastChatStream] global.clients 不存在');
+    return;
+  }
+  
+  const clientCount = global.clients.size;
+  let sentCount = 0;
+  
   global.clients.forEach(client => {
     // WebSocket.OPEN === 1
     if (client.readyState !== 1) return;
@@ -1521,5 +1527,8 @@ global.broadcastChatStream = function(conversationId, streamPayload) {
       type: 'msg_stream',
       payload: streamPayload
     }));
+    sentCount++;
   });
+  
+  console.log(`[broadcastChatStream] conv=${conversationId}, clients=${clientCount}, sent=${sentCount}`);
 };
