@@ -1740,7 +1740,7 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
           return;
         }
 
-        console.log(`[Hub] 流式消息: conv=${conversationId}, msg=${messageId}, done=${isDone}`);
+        console.log(`[Hub] 流式消息: conv=${conversationId}, msg=${messageId}, done=${isDone}, chunk=${chunk ? chunk.substring(0,50) : 'empty'}`);
         if (messageId) {
           recentChatStreams.set(messageId, Date.now());
         }
