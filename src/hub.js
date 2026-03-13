@@ -1671,13 +1671,16 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
             console.log(`[Hub] 开始模拟流式: steps, 每步延迟40ms`);
             const text = String(reply);
             const steps = Math.min(24, Math.max(6, Math.ceil(text.length / 24)));
+            let accumulated = '';
             for (let i = 1; i <= steps; i++) {
               const end = Math.ceil((text.length * i) / steps);
+              const increment = text.slice(accumulated.length, end); // 🔥 只发送增量部分
+              accumulated = text.slice(0, end); // 更新累积内容
               global.broadcastChatStream(conversationId, {
                 conversationId,
                 sessionKey,
                 messageId: replyMsgId,
-                chunk: text.slice(0, end),
+                chunk: increment, // 🔥 发送增量而不是累积
                 isDone: false,
               });
               await new Promise(resolve => setTimeout(resolve, i < steps ? 40 : 20));
@@ -1686,7 +1689,7 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
               conversationId,
               sessionKey,
               messageId: replyMsgId,
-              chunk: text,
+              chunk: '', // 🔥 最后发送空 chunk 表示完成
               isDone: true,
             });
             console.log(`[Hub] 模拟流式完成`);
