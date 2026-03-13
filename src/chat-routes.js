@@ -1510,12 +1510,13 @@ module.exports = { registerChatRoutes };
 
 // 🔥 流式广播函数
 // 🔥 修复：推送给所有订阅了该 campKey 的客户端，不检查 conversationId
+// 🔥 使用 1 代替 WebSocket.OPEN（避免运行时 WebSocket 未定义问题）
 global.broadcastChatStream = function(conversationId, streamPayload) {
   if (!global.clients) return;
 
   global.clients.forEach(client => {
-    // 🔥 只检查连接状态，不检查 conversationId（让所有客户端都能收到流式消息）
-    if (client.readyState !== WebSocket.OPEN) return;
+    // WebSocket.OPEN === 1
+    if (client.readyState !== 1) return;
     client.send(JSON.stringify({
       type: 'msg_stream',
       payload: streamPayload
