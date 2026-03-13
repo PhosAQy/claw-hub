@@ -1509,13 +1509,13 @@ async function handleBotReply(pool, agents, conversationId, botId, userMessage, 
 module.exports = { registerChatRoutes };
 
 // 🔥 流式广播函数
+// 🔥 修复：推送给所有订阅了该 campKey 的客户端，不检查 conversationId
 global.broadcastChatStream = function(conversationId, streamPayload) {
   if (!global.clients) return;
 
   global.clients.forEach(client => {
+    // 🔥 只检查连接状态，不检查 conversationId（让所有客户端都能收到流式消息）
     if (client.readyState !== WebSocket.OPEN) return;
-    // 兼容旧版 Flutter：它不会发送 watch-conversation，所以这里不能强依赖 client.conversationId
-    if (client.conversationId && client.conversationId !== conversationId) return;
     client.send(JSON.stringify({
       type: 'msg_stream',
       payload: streamPayload

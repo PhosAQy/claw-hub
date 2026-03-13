@@ -104,11 +104,11 @@ async function initDB() {
 
     /**
      * session_snapshots：每个 session 每次活动状态的快照
-     * 
+     *
      * session_key:         session 的唯一标识
      * session_updated_at:  该 session 真正发生活动的时间戳（来自 OpenClaw 的 updatedAt）
      * total_tokens:        该时刻的累计 token 数（单调递增）
-     * 
+     *
      * UNIQUE(session_key, session_updated_at) 保证同一活动不重复写入
      * 后续通过相邻快照的 total_tokens 差值，得到该时间段的 token 增量
      */
@@ -308,6 +308,7 @@ async function saveTokenUsage(agentId, agentName, tokenUsage) {
 
 /**
  * 广播聊天消息给所有客户端
+ * 🔥 修复：推送给所有订阅了该 campKey 的客户端，不检查 conversationId
  */
 function broadcastChatMessage(conversationId, message) {
   const data = JSON.stringify({
@@ -319,6 +320,7 @@ function broadcastChatMessage(conversationId, message) {
   });
 
   clients.forEach(client => {
+    // 🔥 只检查连接状态，不检查 conversationId（让所有客户端都能收到）
     if (client.readyState === WebSocket.OPEN) {
       client.send(data);
     }
@@ -385,10 +387,10 @@ async function getTokenTimeSeries(agentId = null, hours = 6) {
   try {
     const agentFilter = agentId ? 'AND agent_id = ?' : '';
     const params = agentId ? [hours, agentId] : [hours];
-    
+
     // 从 token_usage 表查询
     const [rows] = await pool.query(`
-      SELECT 
+      SELECT
         agent_id,
         agent_name,
         time_slot,
@@ -403,7 +405,7 @@ async function getTokenTimeSeries(agentId = null, hours = 6) {
       GROUP BY agent_id, agent_name, time_slot
       ORDER BY time_slot ASC
     `, params);
-    
+
     return rows.map(r => ({
       agent_id: r.agent_id,
       agent_name: r.agent_name,
@@ -467,7 +469,7 @@ async function getLatestVersion() {
         .map(line => line.split('refs/tags/')[1])
         .filter(tag => tag && tag.startsWith('v'))
         .sort((a, b) => compareVersions(b, a));
-      
+
       resolve(tags[0] ? tags[0].replace('v', '') : VERSION);
     });
   });
@@ -478,7 +480,7 @@ async function getLatestVersion() {
  */
 async function doUpdate() {
   const projectDir = path.join(__dirname, '..');
-  
+
   return new Promise((resolve, reject) => {
     // 先 reset 清除本地改动，再 pull
     exec('git reset --hard HEAD && git clean -fd', { cwd: projectDir, timeout: 10000 }, () => {
@@ -489,20 +491,20 @@ async function doUpdate() {
         reject(new Error(`Git pull failed: ${stderr}`));
         return;
       }
-      
+
       const pullResult = stdout.trim();
-      
+
       // 检查是否有更新
       if (pullResult.includes('Already up to date')) {
-        resolve({ 
-          success: true, 
-          updated: false, 
+        resolve({
+          success: true,
+          updated: false,
           message: 'Already up to date',
-          version: VERSION 
+          version: VERSION
         });
         return;
       }
-      
+
       // 有更新，需要重启
       resolve({
         success: true,
@@ -511,7 +513,7 @@ async function doUpdate() {
         version: VERSION,
         needRestart: true
       });
-      
+
       // 3秒后重启（给响应时间）
       setTimeout(() => {
         console.log('[Hub] 更新完成，部署前端文件...');
@@ -539,7 +541,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && !req.url.startsWith('/api/')) {
     let filePath = req.url === '/' ? '/index.html' : req.url;
     filePath = path.join(__dirname, 'frontend', filePath);
-    
+
     const ext = path.extname(filePath);
     const mimeTypes = {
       '.html': 'text/html; charset=utf-8',
@@ -551,7 +553,7 @@ const server = http.createServer((req, res) => {
       '.gif': 'image/gif',
       '.svg': 'image/svg+xml'
     };
-    
+
     fs.readFile(filePath, (err, data) => {
       if (err) {
         res.writeHead(404);
@@ -632,13 +634,13 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/update')) {
     const url = new URL(req.url, 'http://x');
     const token = url.searchParams.get('token');
-    
+
     if (token !== UPDATE_TOKEN) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid token' }));
       return;
     }
-    
+
     doUpdate().then(result => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
@@ -671,19 +673,19 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/agent/check-update')) {
     const url = new URL(req.url, 'http://x');
     const agentId = url.searchParams.get('agent') || 'main';
-    
+
     const agent = agents.get(agentId);
     if (!agent) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent not found' }));
       return;
     }
-    
+
     // 获取最新版本
     getLatestVersion().then(latest => {
       const current = agent.agentVersion || '0.0.0';
       const hasUpdate = compareVersions(latest, current) > 0;
-      
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         agentId,
@@ -701,24 +703,24 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     const agentId = url.searchParams.get('agent') || 'main';
     const token = url.searchParams.get('token');
-    
+
     // 验证 token
     if (token !== UPDATE_TOKEN) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid token' }));
       return;
     }
-    
+
     const agent = agents.get(agentId);
     if (!agent || !agent.ws) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent not found or offline' }));
       return;
     }
-    
+
     // 发送更新命令到 Agent（广播到所有连接）
     broadcastToAgent(agent, { type: 'update', payload: { token } });
-    
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, message: 'Update command sent' }));
     return;
@@ -729,24 +731,24 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     const agentId = url.searchParams.get('agent') || 'main';
     const token = url.searchParams.get('token');
-    
+
     // 验证 token
     if (token !== UPDATE_TOKEN) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid token' }));
       return;
     }
-    
+
     const agent = agents.get(agentId);
     if (!agent || !agent.ws) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent not found or offline' }));
       return;
     }
-    
+
     // 发送启动命令到 Agent
     broadcastToAgent(agent, { type: 'gateway-start', payload: { token } });
-    
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, message: 'Gateway start command sent' }));
     return;
@@ -757,25 +759,25 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     const agentId = url.searchParams.get('agent') || 'main';
     const token = url.searchParams.get('token');
-    
+
     // 验证 token
     if (token !== UPDATE_TOKEN) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid token' }));
       return;
     }
-    
+
     const agent = agents.get(agentId);
     if (!agent || !agent.ws) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent not found or offline' }));
       return;
     }
-    
+
     // 发送停止命令到 Agent
     // 发送停止命令到 Agent（广播到所有连接）
     broadcastToAgent(agent, { type: 'gateway-stop', payload: { token } });
-    
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, message: 'Gateway stop command sent' }));
     return;
@@ -785,17 +787,17 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/gateway/refresh')) {
     const url = new URL(req.url, 'http://x');
     const agentId = url.searchParams.get('agent') || 'main';
-    
+
     const agent = agents.get(agentId);
     if (!agent || !agent.ws) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent not found or offline' }));
       return;
     }
-    
+
     // 发送状态刷新请求到 Agent
     broadcastToAgent(agent, { type: 'status-request' });
-    
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, message: 'Status refresh request sent' }));
     return;
@@ -806,24 +808,24 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     const agentId = url.searchParams.get('agent') || 'main';
     const token = url.searchParams.get('token');
-    
+
     // 验证 token
     if (token !== UPDATE_TOKEN) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid token' }));
       return;
     }
-    
+
     const agent = agents.get(agentId);
     if (!agent || !agent.ws) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent not found or offline' }));
       return;
     }
-    
+
     // 发送重启命令到 Agent
     broadcastToAgent(agent, { type: 'gateway-restart', payload: { token } });
-    
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, message: 'Gateway restart command sent' }));
     return;
@@ -835,27 +837,27 @@ const server = http.createServer((req, res) => {
     const agentId = url.searchParams.get('agent') || 'main';
     const sessionKey = url.searchParams.get('session');
     const limit = parseInt(url.searchParams.get('limit') || '100');
-    
+
     if (!sessionKey) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Missing session parameter' }));
       return;
     }
-    
+
     const agent = agents.get(agentId);
     if (!agent || !agent.ws) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent not found or offline' }));
       return;
     }
-    
+
     // 保存响应回调，等待 Agent 返回（无超时限制）
     const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
     // 不设置超时，无限等待 Agent 响应
     const timeout = null;
-    
+
     pendingRequests.set(requestId, { res, timeout });
-    
+
     // 发送请求到 Agent（广播到所有连接）
     broadcastToAgent(agent, {
       type: 'session-history',
@@ -875,13 +877,13 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const { username, password, email } = JSON.parse(body);
-        
+
         if (!username || !password) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '用户名和密码不能为空' }));
           return;
         }
-        
+
         // 检查用户名是否已存在
         const [existing] = await pool.query('SELECT id FROM users WHERE username = ?', [username]);
         if (existing.length > 0) {
@@ -889,14 +891,14 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ error: '用户名已存在' }));
           return;
         }
-        
+
         // 生成密码哈希（简单版，生产环境应该用 bcrypt）
         const crypto = require('crypto');
         const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-        
+
         // 生成 camp_key
         const campKey = crypto.randomBytes(32).toString('hex');
-        
+
         // 生成 user_id: uid_<16位数字小写字母>
         const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         let randomStr = '';
@@ -904,19 +906,19 @@ const server = http.createServer((req, res) => {
           randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         const userId = `uid_${randomStr}`;
-        
+
         // 插入用户
         await pool.query(
           'INSERT INTO users (user_id, username, password_hash, email, camp_key) VALUES (?, ?, ?, ?, ?)',
           [userId, username, passwordHash, email || null, campKey]
         );
-        
+
         res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           message: '注册成功',
           userId,
-          campKey 
+          campKey
         }));
       } catch (e) {
         console.error('[Auth] 注册失败:', e.message);
@@ -934,43 +936,43 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const { username, password } = JSON.parse(body);
-        
+
         if (!username || !password) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '用户名和密码不能为空' }));
           return;
         }
-        
+
         // 查询用户
         const [users] = await pool.query(
           'SELECT * FROM users WHERE username = ? AND is_active = TRUE',
           [username]
         );
-        
+
         if (users.length === 0) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '用户名或密码错误' }));
           return;
         }
-        
+
         const user = users[0];
-        
+
         // 验证密码
         const crypto = require('crypto');
         const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-        
+
         if (user.password_hash !== passwordHash) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '用户名或密码错误' }));
           return;
         }
-        
+
         // 更新最后登录时间
         await pool.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           message: '登录成功',
           user: {
             id: user.id,
@@ -996,38 +998,38 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const { username, password } = JSON.parse(body);
-        
+
         // 验证用户
         const [users] = await pool.query(
           'SELECT * FROM users WHERE username = ? AND is_active = TRUE',
           [username]
         );
-        
+
         if (users.length === 0) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '用户名或密码错误' }));
           return;
         }
-        
+
         const user = users[0];
         const crypto = require('crypto');
         const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-        
+
         if (user.password_hash !== passwordHash) {
           res.writeHead(401, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '用户名或密码错误' }));
           return;
         }
-        
+
         // 生成新的 camp_key
         const newCampKey = crypto.randomBytes(32).toString('hex');
-        
+
         // 更新数据库
         await pool.query('UPDATE users SET camp_key = ? WHERE id = ?', [newCampKey, user.id]);
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           message: 'Key 已重新生成',
           campKey: newCampKey
         }));
@@ -1051,13 +1053,13 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const { userId, name, description } = JSON.parse(body);
-        
+
         if (!userId || !name) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: '用户ID和Bot名称不能为空' }));
           return;
         }
-        
+
         // 验证用户是否存在
         const [users] = await pool.query('SELECT * FROM users WHERE user_id = ? AND is_active = TRUE', [userId]);
         if (users.length === 0) {
@@ -1065,9 +1067,9 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ error: '用户不存在' }));
           return;
         }
-        
+
         const crypto = require('crypto');
-        
+
         // 生成 bot_id: bot_<16位>
         const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         let randomStr = '';
@@ -1075,19 +1077,19 @@ const server = http.createServer((req, res) => {
           randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         const botId = `bot_${randomStr}`;
-        
+
         // 生成 bot token
         const botToken = crypto.randomBytes(32).toString('hex');
-        
+
         // 插入 bot
         await pool.query(
           'INSERT INTO bots (bot_id, user_id, name, description, token) VALUES (?, ?, ?, ?, ?)',
           [botId, userId, name, description || null, botToken]
         );
-        
+
         res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           message: 'Bot 创建成功',
           bot: {
             botId,
@@ -1110,23 +1112,23 @@ const server = http.createServer((req, res) => {
     (async () => {
       const urlParams = new URL(req.url, `http://${req.headers.host}`);
       const userId = urlParams.searchParams.get('userId');
-      
+
       if (!userId) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: '用户ID不能为空' }));
         return;
       }
-      
+
       try {
         const [bots] = await pool.query(
           'SELECT bot_id, name, description, avatar, created_at, is_active, auto_connect FROM bots WHERE user_id = ? AND is_active = TRUE ORDER BY created_at DESC',
           [userId]
         );
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
-          bots 
+        res.end(JSON.stringify({
+          success: true,
+          bots
         }));
       } catch (e) {
         console.error('[Bot] 查询失败:', e.message);
@@ -1143,28 +1145,28 @@ const server = http.createServer((req, res) => {
       const urlParams = new URL(req.url, `http://${req.headers.host}`);
       const botId = urlParams.searchParams.get('botId');
       const userId = urlParams.searchParams.get('userId');
-      
+
       if (!botId || !userId) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Bot ID 和用户ID不能为空' }));
         return;
       }
-      
+
       try {
         const [bots] = await pool.query(
           'SELECT * FROM bots WHERE bot_id = ? AND user_id = ? AND is_active = TRUE',
           [botId, userId]
         );
-        
+
         if (bots.length === 0) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Bot 不存在' }));
           return;
         }
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           bot: bots[0]
         }));
       } catch (e) {
@@ -1183,28 +1185,28 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const { botId, userId } = JSON.parse(body);
-        
+
         if (!botId || !userId) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Bot ID 和用户ID不能为空' }));
           return;
         }
-        
+
         // 软删除
         const [result] = await pool.query(
           'UPDATE bots SET is_active = FALSE WHERE bot_id = ? AND user_id = ?',
           [botId, userId]
         );
-        
+
         if (result.affectedRows === 0) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Bot 不存在' }));
           return;
         }
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           message: 'Bot 已删除'
         }));
       } catch (e) {
@@ -1223,30 +1225,30 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const { botId, userId } = JSON.parse(body);
-        
+
         if (!botId || !userId) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Bot ID 和用户ID不能为空' }));
           return;
         }
-        
+
         const crypto = require('crypto');
         const newToken = crypto.randomBytes(32).toString('hex');
-        
+
         const [result] = await pool.query(
           'UPDATE bots SET token = ? WHERE bot_id = ? AND user_id = ? AND is_active = TRUE',
           [newToken, botId, userId]
         );
-        
+
         if (result.affectedRows === 0) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Bot 不存在' }));
           return;
         }
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           message: 'Token 已重新生成',
           token: newToken
         }));
@@ -1259,7 +1261,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // POST /api/bot/auto-connect — 设置 Bot 自动连接状态（持久化到 DB）
+  // POST /api/bot/auto-connect - 设置 Bot 自动连接状态（持久化到 DB）
   if (req.url === '/api/bot/auto-connect' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -1301,7 +1303,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // GET /api/bot/status?botId=xxx — 检查 bot 是否有 agent 在线
+  // GET /api/bot/status?botId=xxx - 检查 bot 是否有 agent 在线
   if (req.url.startsWith('/api/bot/status') && req.method === 'GET') {
     (async () => {
       const url = new URL(req.url, 'http://localhost');
@@ -1495,7 +1497,7 @@ wss.on('connection', (ws, req) => {
       // 从 sockets 中移除此连接
       agent.sockets.delete(ws);
       console.log(`[Hub] Agent ${agentId} 连接关闭，剩余 ${agent.sockets.size} 个连接`);
-      
+
       // 只有当所有连接都关闭时才标记为离线
       if (agent.sockets.size === 0) {
         agent.status = 'offline';
@@ -1594,7 +1596,7 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
         agent.startTime = payload.startTime;  // 保存启动时间
         agent.uptime = payload.uptime;  // 保存运行时长
         agent.tokenUsage = payload.tokenUsage || [];  // 保存 token 使用数据
-        
+
         // 异步存库
         saveSnapshots(payload.id, agent.name, payload.sessions);
         // 存储精确的 token 使用数据
@@ -1604,12 +1606,12 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
         broadcastToClients();
       }
       break;
-    
+
     case 'update-result':
       // Agent 更新结果
       console.log(`[Hub] Agent ${payload.id} 更新结果:`, payload);
       break;
-    
+
     case 'session-history-result':
       // 会话历史返回
       const requestId = payload.requestId;
@@ -1617,19 +1619,19 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
         const { res, timeout } = pendingRequests.get(requestId);
         clearTimeout(timeout);
         pendingRequests.delete(requestId);
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(payload));
       }
       break;
-    
+
     case 'feishu-reply':
       // Agent 回复飞书消息
       if (global.feishuIntegration) {
         global.feishuIntegration.handleAgentReply(msg);
       }
       break;
-    
+
     case 'chat-reply':
       // Agent 回复聊天消息
       // 流程: Agent(channelRuntime.dispatchReply) → Hub(chat-reply) → DB → 前端(WebSocket broadcast)
@@ -1661,9 +1663,12 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
           const replyMsgId = providedMessageId || generateId('msg');
           const agentId = senderBotId || 'bot';
 
-          // 如果上游没有发出真实流式，就在 Hub 侧模拟一个渐进流式，保证客户端先能看到“流起来”
+          // 如果上游没有发出真实流式，就在 Hub 侧模拟一个渐进流式，保证客户端先能看到"流起来"
           const hadRealStream = recentChatStreams.has(replyMsgId) && (Date.now() - recentChatStreams.get(replyMsgId) < 15000);
-          if (!hadRealStream && global.broadcastChatStream) {
+          const usedSimulatedStream = !hadRealStream && global.broadcastChatStream;
+          console.log(`[Hub] 模拟流式检查: replyMsgId=${replyMsgId}, hadRealStream=${hadRealStream}, usedSimulatedStream=${usedSimulatedStream}, reply长度=${reply?.length || 0}`);
+          if (usedSimulatedStream) {
+            console.log(`[Hub] 开始模拟流式: steps, 每步延迟40ms`);
             const text = String(reply);
             const steps = Math.min(24, Math.max(6, Math.ceil(text.length / 24)));
             for (let i = 1; i <= steps; i++) {
@@ -1675,7 +1680,7 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
                 chunk: text.slice(0, end),
                 isDone: false,
               });
-              await new Promise(resolve => setTimeout(resolve, i < steps ? 25 : 10));
+              await new Promise(resolve => setTimeout(resolve, i < steps ? 40 : 20));
             }
             global.broadcastChatStream(conversationId, {
               conversationId,
@@ -1684,6 +1689,7 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
               chunk: text,
               isDone: true,
             });
+            console.log(`[Hub] 模拟流式完成`);
           }
 
           await pool.query(
@@ -1697,11 +1703,16 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
             [replyMsgId]
           );
 
-          // 广播给前端（完成 Agent → Hub → 前端 的最后一步）
-          if (messages[0] && global.broadcastChatMessage) {
+          // 广播给前端
+          // 如果已经用了模拟流式，前端已经收到了完整消息，不需要再广播 chat-message
+          // 只有在没有模拟流式的情况下，才广播 chat-message
+          if (messages[0] && !usedSimulatedStream && global.broadcastChatMessage) {
             global.broadcastChatMessage(conversationId, messages[0]);
+            console.log(`[Hub] Agent 回复已广播(chat-message): ${replyMsgId}, bot=${agentId}`);
+          }
 
-            // 广播 msg_reply 事件（含元数据）
+          // 无论是否模拟流式，都发送 msg_reply 事件（含元数据）
+          if (messages[0]) {
             await sendMsgReply(pool, conversationId, {
               messageId: replyMsgId,
               requestMessageId: msgId || null,
@@ -1710,7 +1721,7 @@ function handleMessage(ws, msg, setAgentId, connToken, connAgentId) {
               outputTokens: 0,
               thinkingMs: 0
             });
-            console.log(`[Hub] Agent 回复已广播: ${replyMsgId}, bot=${agentId}`);
+            console.log(`[Hub] msg_reply 已发送: ${replyMsgId}, simulated=${usedSimulatedStream}`);
           }
         } catch (e) {
           console.error('[Hub] 保存 Agent 回复失败:', e.message);
@@ -1797,16 +1808,16 @@ setInterval(() => {
 
 async function start() {
   await initDB();
-  
+
   // 增加监听器上限（chat-routes + feishu-routes 会注册多个 request 监听器）
   server.setMaxListeners(30);
-  
+
   // 注册聊天路由
   registerChatRoutes(server, pool, agents);
-  
+
   // 初始化飞书集成
   global.feishuIntegration = registerFeishuRoutes(server, pool, agents, broadcastChatMessage);
-  
+
   // 暴露广播函数和工具函数供 chat-routes 使用
   global.broadcastChatMessage = broadcastChatMessage;
   global.broadcastChatEvent = broadcastChatEvent;
@@ -1816,7 +1827,7 @@ async function start() {
     }
     return false;
   };
-  
+
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.log(`⚠️  端口 ${PORT} 被占用，尝试杀掉旧进程...`);
