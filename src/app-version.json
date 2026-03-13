@@ -1,7 +1,7 @@
 {
   "version": "1.5.1",
   "versionCode": 46,
-  "downloadUrl": "https://github.com/PhosAQy/claw-hub/releases/download/v1.5.1/camp-release.apk",
+  "downloadUrl": "https://github.com/claw-camp/claw-hub/releases/download/v1.5.1/app-release.apk",
   "releaseNotes": "修复未读消息提示错误、后台收不到消息、进入不自动刷新等问题",
   "releaseDate": "2026-03-13",
   "minAndroidVersion": 21,
