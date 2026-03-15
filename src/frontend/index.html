@@ -1517,6 +1517,38 @@
       transform: scale(1.05);
     }
 
+    /* 上下文信息栏 */
+    .context-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 20px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-bottom: 1px solid #E0E0E0;
+      font-size: 12px;
+    }
+
+    .context-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .context-label {
+      color: #888;
+      font-weight: 500;
+    }
+
+    .context-value {
+      color: #333;
+      font-weight: 600;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    .context-bar .context-item:first-child .context-value {
+      color: #E8372B;
+    }
+
     /* 聊天面板布局 */
     .conversations-panel {
       width: 280px;
@@ -2007,6 +2039,23 @@
               <div class="status" id="chatStatus"></div>
             </div>
           </div>
+          
+          <!-- 上下文信息栏 -->
+          <div id="contextBar" class="context-bar" style="display:none;">
+            <div class="context-item">
+              <span class="context-label">模型</span>
+              <span class="context-value" id="contextModel">-</span>
+            </div>
+            <div class="context-item">
+              <span class="context-label">消息</span>
+              <span class="context-value" id="contextMessages">0</span>
+            </div>
+            <div class="context-item">
+              <span class="context-label">Token</span>
+              <span class="context-value" id="contextTokens">0</span>
+            </div>
+          </div>
+          
           <div id="messagesContainer" class="chat-messages">
             <div class="chat-empty">← 选择一个会话开始聊天</div>
           </div>
@@ -3837,12 +3886,57 @@
       }
     }
 
+    // 加载上下文信息
+    async function loadContextInfo(conversationId) {
+      const contextBar = document.getElementById('contextBar');
+      const contextModel = document.getElementById('contextModel');
+      const contextMessages = document.getElementById('contextMessages');
+      const contextTokens = document.getElementById('contextTokens');
+      
+      try {
+        const res = await fetch(`/api/chat/conversation/context/${conversationId}`, {
+          headers: { 'x-camp-key': currentUser.campKey }
+        });
+        const data = await res.json();
+        
+        if (data.success && data.context) {
+          // 显示上下文信息栏
+          contextBar.style.display = 'flex';
+          
+          // 更新模型
+          const modelDisplay = data.context.model || 'unknown';
+          contextModel.textContent = modelDisplay.includes('/') ? modelDisplay.split('/')[1] : modelDisplay;
+          contextModel.title = data.context.model;
+          
+          // 更新消息数
+          contextMessages.textContent = data.context.messageCount || 0;
+          
+          // 更新 Token 数
+          const tokens = data.context.tokenUsage?.total || 0;
+          if (tokens > 1000000) {
+            contextTokens.textContent = (tokens / 1000000).toFixed(1) + 'M';
+          } else if (tokens > 1000) {
+            contextTokens.textContent = (tokens / 1000).toFixed(1) + 'K';
+          } else {
+            contextTokens.textContent = tokens;
+          }
+          contextTokens.title = `输入: ${data.context.tokenUsage?.input || 0}\n输出: ${data.context.tokenUsage?.output || 0}`;
+        } else {
+          contextBar.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('[Context] 加载上下文信息失败:', e);
+        contextBar.style.display = 'none';
+      }
+    }
+
     // 加载消息
     async function loadMessages(conversationId) {
       const container = document.getElementById('messagesContainer');
       const chatTitle = document.getElementById('chatTitle');
       const chatStatus = document.getElementById('chatStatus');
       const inputArea = document.getElementById('chatInputArea');
+      const contextBar = document.getElementById('contextBar');
 
       container.innerHTML = '<div class="chat-empty">加载中...</div>';
 
@@ -3865,6 +3959,9 @@
 
         // 显示输入框
         inputArea.style.display = 'flex';
+        
+        // 加载上下文信息
+        loadContextInfo(conversationId);
 
         // 获取消息
         const msgRes = await fetch(`/api/chat/messages/${conversationId}`, {
@@ -3943,6 +4040,11 @@
 
         // 刷新会话列表
         loadConversations();
+        
+        // 刷新上下文信息
+        if (currentConversation?.conversation_id) {
+          loadContextInfo(currentConversation.conversation_id);
+        }
 
         // 如果是 Bot 会话，等待 Bot 回复
         if (currentConversation.type === 'bot') {

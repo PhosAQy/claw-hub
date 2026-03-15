@@ -518,6 +518,108 @@ function registerChatRoutes(server, pool, agents) {
     }
   });
   
+  // 获取会话上下文信息（模型、token 使用量等）
+  server.on('request', async (req, res) => {
+    if (!req.url.startsWith('/api/chat/conversation/context') || req.method !== 'GET') return;
+    
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      const conversationId = url.pathname.split('/')[4];
+      const campKey = req.headers['x-camp-key'];
+      
+      // 验证用户
+      const [users] = await pool.query(
+        'SELECT user_id FROM users WHERE camp_key = ? AND is_active = TRUE',
+        [campKey]
+      );
+      if (!users.length) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '未授权' }));
+        return;
+      }
+      const userId = users[0].user_id;
+      
+      // 验证用户是否在会话中
+      const [memberCheck] = await pool.query(
+        'SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?',
+        [conversationId, userId]
+      );
+      if (!memberCheck.length) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '无权访问' }));
+        return;
+      }
+      
+      // 获取会话信息
+      const [conversations] = await pool.query(
+        'SELECT * FROM conversations WHERE conversation_id = ?',
+        [conversationId]
+      );
+      if (!conversations.length) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '会话不存在' }));
+        return;
+      }
+      
+      const conversation = conversations[0];
+      
+      // 获取消息统计
+      const [stats] = await pool.query(`
+        SELECT 
+          COUNT(*) as message_count,
+          MIN(created_at) as first_message,
+          MAX(created_at) as last_message
+        FROM messages 
+        WHERE conversation_id = ?
+      `, [conversationId]);
+      
+      // 获取 token 使用量（从 token_usage 表）
+      const [tokenStats] = await pool.query(`
+        SELECT 
+          SUM(input_tokens) as total_input,
+          SUM(output_tokens) as total_output,
+          SUM(net_tokens) as total_tokens
+        FROM token_usage
+        WHERE agent_id = (
+          SELECT bot_id FROM conversations WHERE conversation_id = ?
+        )
+        AND date = CURDATE()
+      `, [conversationId]);
+      
+      // 获取模型信息（从关联的 bot）
+      let model = 'unknown';
+      if (conversation.bot_id && agents) {
+        const agent = agents.get(conversation.bot_id);
+        if (agent && agent.gateway) {
+          model = agent.gateway.model || 'unknown';
+        }
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        context: {
+          conversationId,
+          type: conversation.type,
+          model,
+          messageCount: stats[0]?.message_count || 0,
+          tokenUsage: {
+            input: tokenStats[0]?.total_input || 0,
+            output: tokenStats[0]?.total_output || 0,
+            total: tokenStats[0]?.total_tokens || 0
+          },
+          firstMessage: stats[0]?.first_message,
+          lastMessage: stats[0]?.last_message
+        }
+      }));
+      
+    } catch (e) {
+      console.error('[Chat] 获取上下文信息失败:', e.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '获取上下文信息失败' }));
+    }
+  });
+  
   // ──────────────────────────────────────────────
   // 群聊管理
   // ──────────────────────────────────────────────
